@@ -6,7 +6,7 @@
 - Martín Mirabete
 - Carlos Ghio
 
-# Proyecto - Reconocimiento de Ladrillos y/o Bloques
+# Proyecto - Reconocimiento de Ladrillos Cerámicos
 
 Este proyecto integra visión computacional y aprendizaje profundo para automatizar la identificación y trazabilidad de vagonetas y modelos de ladrillos en una línea de producción de fábrica. El sistema permite registrar, consultar y analizar los movimientos de cada vagoneta, asociando eventos de ingreso y egreso, modelo de ladrillo, merma y trayectoria, facilitando la optimización y control de calidad del proceso productivo.
 
