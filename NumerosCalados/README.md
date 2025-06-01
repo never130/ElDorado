@@ -1,7 +1,9 @@
 Numeros Calados - Detección con YOLOv8
-Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en placas de vehículos. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes. 🚀
+
+Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en placas de vehículos. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes. 
 
  Estructura del Proyecto
+ 
 
  NumerosCalados/
 
