@@ -83,7 +83,6 @@ ElDorado/
 ┃          ┣ video_prueba.mp4 # Video con detección aplicada
 
 ┣ readme.rpbpflow # Información sobre el dataset en Roboflow
-
 ...
 
 
