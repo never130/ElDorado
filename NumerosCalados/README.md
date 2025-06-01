@@ -2,20 +2,35 @@ Numeros Calados - Detección con YOLOv8
 Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en placas de vehículos. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes. 🚀
 
 📂 Estructura del Proyecto
+
 📦 NumerosCalados/
+
  ┣ 📂 dataset/  # Dataset de entrenamiento
+ 
  ┃ ┣ 🎥 CarroNumCalados_v2.mp4  # Video original con números calados
+ 
  ┃ ┣ 📜 readme.dataset  # Descripción del dataset
+ 
  ┣ 📂 training/  # Código de entrenamiento
+ 
  ┃ ┣ 📜 train.py  # Script para entrenar YOLOv8
+ 
  ┃ ┣ 📜 data.yaml  # Configuración del dataset
+ 
  ┃ ┣ 📜 best.pt  # Modelo YOLOv8 entrenado
+ 
  ┣ 📂 detection/  # Código de inferencia
+ 
  ┃ ┣ 📜 detect_video.py  # Detección en videos
+ 
  ┣ 📂 results/  # Datos generados tras la detección
+ 
  ┃ ┣ 📜 detecciones.json  # Resultados en formato JSON
+ 
  ┃ ┣ 🎥 video_prueba.mp4  # Video con detección aplicada
+ 
  ┣ 📜 readme.rpbpflow  # Información sobre el dataset en Roboflow
+ 
 
 Instalación y Requisitos
 Antes de ejecutar el código, asegúrate de tener Python 3.8+, ultralytics y OpenCV instalados:
