@@ -84,4 +84,4 @@ with open("results/detecciones.json", "r") as file:
 
 coleccion.insert_many(detecciones)
 
-print("✅ Detecciones almacenadas en MongoDB.")
+print("Detecciones almacenadas en MongoDB.")
