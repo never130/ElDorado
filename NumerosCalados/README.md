@@ -1,35 +1,35 @@
 Numeros Calados - Detección con YOLOv8
 Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en placas de vehículos. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes. 🚀
 
-📂 Estructura del Proyecto
+ Estructura del Proyecto
 
-📦 NumerosCalados/
+ NumerosCalados/
 
- ┣ 📂 dataset/  # Dataset de entrenamiento
+ ┣  dataset/  # Dataset de entrenamiento
  
- ┃ ┣ 🎥 CarroNumCalados_v2.mp4  # Video original con números calados
+ ┃ ┣  CarroNumCalados_v2.mp4  # Video original con números calados
+
+ ┃ ┣  readme.dataset  # Descripción del dataset
  
- ┃ ┣ 📜 readme.dataset  # Descripción del dataset
+ ┣  training/  # Código de entrenamiento
  
- ┣ 📂 training/  # Código de entrenamiento
+ ┃ ┣  train.py  # Script para entrenar YOLOv8
+
+ ┃ ┣  data.yaml  # Configuración del dataset
  
- ┃ ┣ 📜 train.py  # Script para entrenar YOLOv8
+ ┃ ┣  best.pt  # Modelo YOLOv8 entrenado
  
- ┃ ┣ 📜 data.yaml  # Configuración del dataset
+ ┣  detection/  # Código de inferencia
  
- ┃ ┣ 📜 best.pt  # Modelo YOLOv8 entrenado
+ ┃ ┣  detect_video.py  # Detección en videos
  
- ┣ 📂 detection/  # Código de inferencia
+ ┣  results/  # Datos generados tras la detección
  
- ┃ ┣ 📜 detect_video.py  # Detección en videos
+ ┃ ┣  detecciones.json  # Resultados en formato JSON
  
- ┣ 📂 results/  # Datos generados tras la detección
+ ┃ ┣  video_prueba.mp4  # Video con detección aplicada
  
- ┃ ┣ 📜 detecciones.json  # Resultados en formato JSON
- 
- ┃ ┣ 🎥 video_prueba.mp4  # Video con detección aplicada
- 
- ┣ 📜 readme.rpbpflow  # Información sobre el dataset en Roboflow
+ ┣  readme.rpbpflow  # Información sobre el dataset en Roboflow
  
 
 Instalación y Requisitos
