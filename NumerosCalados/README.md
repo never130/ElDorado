@@ -35,14 +35,19 @@ Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detecci�
  
 
 Instalación y Requisitos
+
 Antes de ejecutar el código, asegúrate de tener Python 3.8+, ultralytics y OpenCV instalados:
 
 bash
+
 pip install ultralytics opencv-python pymongo
+
  Entrenamiento del Modelo
+ 
 Para entrenar YOLOv8 con el dataset de Roboflow, ejecuta:
 
 python
+
 from ultralytics import YOLO
 
 modelo = YOLO("yolov8n.pt")  # Cargar modelo base
@@ -50,16 +55,20 @@ modelo.train(data="dataset/data.yaml", epochs=150, imgsz=1280, project="runs", n
 Esto generará un modelo optimizado en training/best.pt.
 
  Detección en Video
+ 
 Para ejecutar la detección en un video con YOLOv8:
 
 python
+
 from ultralytics import YOLO
 
 modelo = YOLO("training/best.pt")
 modelo.predict(source="dataset/CarroNumCalados_v2.mp4", conf=0.7, save=True, project="results", name="detect_final")
+
 Esto generará el video procesado en results/video_prueba.mp4.
 
  Guardar Detecciones en MongoDB
+ 
 Si deseas almacenar los datos de detección en MongoDB, usa este script:
 
 python
