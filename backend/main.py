@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 import crud
 from utils.image_processing import detectar_vagoneta_y_placa, detectar_modelo_ladrillo
-from utils.ocr import ocr_placa_img
+from utils.ocr import extract_number_from_image # Changed from ocr_placa_img
 from utils.camera_capture import CameraCapture
 from database import connect_to_mongo, close_mongo_connection
 import cv2
@@ -30,11 +30,11 @@ app = FastAPI(
 # Eventos de inicio y cierre
 @app.on_event("startup")
 async def startup_db_client():
-    await connect_to_mongo()
+    connect_to_mongo()
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    await close_mongo_connection()
+    close_mongo_connection()
 
 # Habilita CORS para permitir peticiones desde el frontend React
 app.add_middleware(

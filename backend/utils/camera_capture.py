@@ -3,8 +3,8 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, Any
 import asyncio
-from .image_processing import process_frame
-from ..crud import create_vagoneta_record
+from .image_processing import process_image  # Changed from process_frame
+from crud import create_vagoneta_record  # Changed from ..crud
 
 class CameraCapture:
     def __init__(self, camera_id: str, camera_url: str, evento: str, tunel: str):
@@ -44,7 +44,7 @@ class CameraCapture:
                 continue
 
             # Procesa el frame
-            detection = process_frame(frame)
+            detection = process_image(frame)
             if detection and detection.get('numero'):
                 self.last_detection_time = current_time
                 await self._handle_detection(detection, frame)
