@@ -1,12 +1,76 @@
+import torch
+from ultralytics import YOLO
+from ultralytics.nn.tasks import DetectionModel
+from ultralytics.nn.modules.conv import Conv as UltralyticsConv # Import Ultralytics Conv
+from ultralytics.nn.modules.conv import Concat # Import Concat
+from torch.nn.modules.container import Sequential, ModuleList # Import ModuleList
+from torch.nn.modules.conv import Conv2d # Importar Conv2d
+from torch.nn.modules.batchnorm import BatchNorm2d # Import BatchNorm2d
+from torch.nn.modules.activation import SiLU # Import SiLU
+from ultralytics.nn.modules.block import C2f, Bottleneck, SPPF # Import C2f, Bottleneck, and SPPF
+from ultralytics.nn.modules.block import DFL # Import DFL
+from torch.nn.modules.pooling import MaxPool2d # Import MaxPool2d
+from torch.nn.modules.upsampling import Upsample # Import Upsample
+from ultralytics.nn.modules.head import Detect # Import Detect
+import os
 import cv2
 import numpy as np
-from ultralytics import YOLO
-from .ocr import extract_number_from_image
-from typing import Dict, Optional, Any, Tuple
+from typing import Optional, Dict, Any # Add this line
+from .ocr import extract_number_from_image # <--- Añadir esta línea
+
+# Permitir la deserialización de clases específicas si es necesario
+# Esto es crucial si el modelo .pt fue guardado con una versión de PyTorch
+# que incluía estas clases directamente en el archivo de pesos.
+# Solo añade clases aquí si confías plenamente en el origen del archivo .pt.
+try:
+    # Lista de clases que pueden ser necesarias para tu modelo YOLOv8
+    # Es posible que necesites añadir más clases dependiendo de la arquitectura exacta
+    # y cómo fue guardado el modelo.
+    safe_globals_list = [
+        DetectionModel,
+        Sequential,
+        Conv2d,
+        UltralyticsConv, # Add Ultralytics Conv to the list
+        BatchNorm2d, # Add BatchNorm2d to the list
+        SiLU, # Add SiLU to the list
+        C2f, # Add C2f to the list
+        ModuleList, # Add ModuleList to the list
+        Bottleneck, # Add Bottleneck to the list
+        SPPF, # Add SPPF to the list
+        MaxPool2d, # Add MaxPool2d to the list
+        Upsample, # Add Upsample to the list
+        Concat, # Add Concat to the list - Corrected typo here
+        Detect, # Add Detect to the list
+        DFL # Add DFL to the list
+    ]
+    # Añadir más clases si aparecen errores similares para otras clases
+    # Ejemplo: from another_module import AnotherClass
+    # safe_globals_list.append(AnotherClass)
+
+    torch.serialization.add_safe_globals(safe_globals_list)
+    print(f"ℹ️ Clases seguras para deserialización de PyTorch añadidas: {safe_globals_list}")
+except AttributeError:
+    print("⚠️ torch.serialization.add_safe_globals no está disponible. Esto es normal en versiones antiguas de PyTorch.")
+except Exception as e:
+    print(f"❓ Error al intentar añadir clases seguras para PyTorch: {e}")
+
 
 class ImageProcessor:
-    def __init__(self, model_path: str = "models/yolov8_vagonetas.pt"):
+    def __init__(self, model_path: Optional[str] = None): # Hacer model_path opcional
         """Inicializa el procesador de imágenes con YOLOv8"""
+        if model_path is None:
+            # Construir la ruta al modelo desde la ubicación de este archivo (backend/utils/image_processing.py)
+            # Sube tres niveles para llegar a la raíz del proyecto (ElDorado)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))            
+            # Construye la ruta al modelo dentro de NumerosCalados - Corrected typo here
+            model_path = os.path.join(project_root, "NumerosCalados", "yolo_model", "training", "best.pt")
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"El archivo del modelo YOLOv8 no se encontró en la ruta: {model_path}. "
+                f"Verifica que el archivo \'best.pt\' exista en \'ElDorado\\NumerosCalados\\yolo_model\\training\\\'.")
+        
+        print(f"ℹ️ Cargando modelo YOLO desde: {model_path}")
         self.model = YOLO(model_path)
         self.last_detection = None
         self.min_confidence = 0.5
@@ -99,3 +163,76 @@ processor = ImageProcessor()
 def process_image(image: np.ndarray) -> Optional[Dict[str, Any]]:
     """Función auxiliar para procesar una imagen"""
     return processor.process_frame(image)
+
+def detectar_vagoneta_y_placa(image_path: str) -> tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], Optional[str]]:
+    """
+    Detecta la vagoneta, la placa, extrae el número de la placa y la imagen recortada de la placa.
+
+    Args:
+        image_path (str): Ruta a la imagen a procesar.
+
+    Returns:
+        tuple: (cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado)
+               - cropped_placa_img (Optional[np.ndarray]): Imagen recortada de la placa.
+               - bbox_vagoneta (Optional[np.ndarray]): Bounding box de la vagoneta.
+               - bbox_placa (Optional[np.ndarray]): Bounding box de la placa.
+               - numero_detectado (Optional[str]): Número de placa detectado.
+    """
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: No se pudo cargar la imagen desde {image_path}")
+        return None, None, None, None
+
+    # ImageProcessor.detect_objects se encarga del preprocesamiento si es necesario
+    detections = processor.detect_objects(image)
+
+    bbox_vagoneta = detections.get('vagoneta')
+    bbox_placa = detections.get('placa')
+    
+    cropped_placa_img = None
+    numero_detectado = None
+
+    if bbox_placa is not None:
+        # Recortar la imagen de la placa de la imagen original
+        placa_y_start, placa_y_end = int(bbox_placa[1]), int(bbox_placa[3])
+        placa_x_start, placa_x_end = int(bbox_placa[0]), int(bbox_placa[2])
+        
+        # Asegurarse que las coordenadas son válidas y están dentro de los límites de la imagen
+        placa_y_start = max(0, placa_y_start)
+        placa_x_start = max(0, placa_x_start)
+        placa_y_end = min(image.shape[0], placa_y_end)
+        placa_x_end = min(image.shape[1], placa_x_end)
+
+        if placa_y_start < placa_y_end and placa_x_start < placa_x_end:
+            placa_image_cropped = image[placa_y_start:placa_y_end, placa_x_start:placa_x_end]
+            if placa_image_cropped.size > 0:
+                cropped_placa_img = placa_image_cropped
+                numero_detectado = extract_number_from_image(placa_image_cropped)
+            else:
+                print(f"Advertencia: El recorte de la placa resultó en una imagen vacía para {image_path}")
+        else:
+            print(f"Advertencia: Coordenadas de recorte de placa inválidas para {image_path}")
+            
+    return cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado
+
+def detectar_modelo_ladrillo(image_path: str) -> Optional[str]:
+    """
+    Detecta el modelo de ladrillo en la imagen.
+
+    Args:
+        image_path (str): Ruta a la imagen a procesar.
+
+    Returns:
+        Optional[str]: El tipo de modelo de ladrillo detectado, o None si no se detecta.
+    """
+    image = cv2.imread(image_path)
+    if image is None:
+        print(f"Error: No se pudo cargar la imagen desde {image_path}")
+        return None
+    
+    detections = processor.detect_objects(image)
+    
+    ladrillo_info = detections.get('ladrillo')
+    if ladrillo_info and 'tipo' in ladrillo_info:
+        return ladrillo_info['tipo']
+    return None

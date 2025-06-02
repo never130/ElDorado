@@ -92,7 +92,7 @@ def buscar_vagonetas(
     .skip(skip) \
     .limit(limit)
     
-    return [doc async for doc in cursor]
+    return [doc for doc in cursor] # Cambiado a comprensión síncrona
 
 def actualizar_registro(
     id: str,
