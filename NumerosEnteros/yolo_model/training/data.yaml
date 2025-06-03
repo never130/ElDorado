@@ -1,0 +1,42 @@
+names:
+- '01'
+- '010'
+- '011'
+- '012'
+- '013'
+- '014'
+- '015'
+- '016'
+- '017'
+- 018
+- 019
+- '02'
+- '020'
+- '021'
+- '03'
+- '030'
+- '035'
+- '04'
+- '040'
+- '05'
+- '050'
+- '06'
+- '060'
+- '07'
+- '070'
+- 08
+- 080
+- 085
+- 09
+- 094
+- '125'
+nc: 31
+roboflow:
+  license: CC BY 4.0
+  project: enteros_carros
+  url: https://universe.roboflow.com/numeros-myekm/enteros_carros/dataset/1
+  version: 1
+  workspace: numeros-myekm
+test: ../test/images
+train: ../train/images
+val: ../valid/images

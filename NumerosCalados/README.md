@@ -1,38 +1,36 @@
 Numeros Calados - Detección con YOLOv8
 
-Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en placas de vehículos. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes. 
+Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números calados en carros. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes.
 
- Estructura del Proyecto
- 
+Estructura del Proyecto
 
- NumerosCalados/
+NumerosCalados/
 
- ┣  dataset/  # Dataset de entrenamiento
- 
- ┃ ┣  CarroNumCalados_v2.mp4  # Video original con números calados
+┣ dataset/ # Dataset de entrenamiento
 
- ┃ ┣  readme.dataset  # Descripción del dataset
- 
- ┣  training/  # Código de entrenamiento
- 
- ┃ ┣  train.py  # Script para entrenar YOLOv8
+┃ ┣ CarroNcalados800.mp4 # Video original con números calados
 
- ┃ ┣  data.yaml  # Configuración del dataset
- 
- ┃ ┣  best.pt  # Modelo YOLOv8 entrenado
- 
- ┣  detection/  # Código de inferencia
- 
- ┃ ┣  detect_video.py  # Detección en videos
- 
- ┣  results/  # Datos generados tras la detección
- 
- ┃ ┣  detecciones.json  # Resultados en formato JSON
- 
- ┃ ┣  video_prueba.mp4  # Video con detección aplicada
- 
- ┣  readme.rpbpflow  # Información sobre el dataset en Roboflow
- 
+┃ ┣ readme.dataset # Descripción del dataset
+
+┣ training/ # Código de entrenamiento
+
+┃ ┣ train.py # Script para entrenar YOLOv8
+
+┃ ┣ data.yaml # Configuración del dataset
+
+┃ ┣ best.pt # Modelo YOLOv8 entrenado
+
+┣ detection/ # Código de inferencia
+
+┃ ┣ detect_video.py # Detección en videos
+
+┣ results/ # Datos generados tras la detección
+
+┃ ┣ detecciones.json # Resultados en formato JSON
+
+┃ ┣ video_prueba.mp4 # Video con detección aplicada
+
+┣ readme.rpbpflow # Información sobre el dataset en Roboflow
 
 Instalación y Requisitos
 
@@ -42,20 +40,20 @@ bash
 
 pip install ultralytics opencv-python pymongo
 
- Entrenamiento del Modelo
- 
+Entrenamiento del Modelo
+
 Para entrenar YOLOv8 con el dataset de Roboflow, ejecuta:
 
 python
 
 from ultralytics import YOLO
 
-modelo = YOLO("yolov8n.pt")  # Cargar modelo base
+modelo = YOLO("yolov8n.pt") # Cargar modelo base
 modelo.train(data="dataset/data.yaml", epochs=150, imgsz=1280, project="runs", name="train_final")
 Esto generará un modelo optimizado en training/best.pt.
 
- Detección en Video
- 
+Detección en Video
+
 Para ejecutar la detección en un video con YOLOv8:
 
 python
@@ -63,12 +61,12 @@ python
 from ultralytics import YOLO
 
 modelo = YOLO("training/best.pt")
-modelo.predict(source="dataset/CarroNumCalados_v2.mp4", conf=0.7, save=True, project="results", name="detect_final")
+modelo.predict(source="dataset/CarroNcalados800.mp4", conf=0.7, save=True, project="results", name="detect_final")
 
 Esto generará el video procesado en results/video_prueba.mp4.
 
- Guardar Detecciones en MongoDB
- 
+Guardar Detecciones en MongoDB
+
 Si deseas almacenar los datos de detección en MongoDB, usa este script:
 
 python
@@ -80,7 +78,7 @@ db = cliente["deteccion_numeros"]
 coleccion = db["resultados"]
 
 with open("results/detecciones.json", "r") as file:
-    detecciones = json.load(file)
+detecciones = json.load(file)
 
 coleccion.insert_many(detecciones)
 
