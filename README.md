@@ -113,7 +113,24 @@ Desarrollar un sistema de visión computacional que permita identificar y trazar
    - Descarga Tesseract desde [github.com/UB-Mannheim/tesseract/wiki](https://github.com/UB-Mannheim/tesseract/wiki)
    - Instala en la ruta por defecto (C:\Program Files\Tesseract-OCR)
 
-### Instalación Rápida
+### Instalación Rápida con Script Automático
+
+**🚀 Nueva opción recomendada:**
+
+1. Clona o descarga este repositorio desde GitHub.
+2. Abre una terminal en la carpeta del proyecto.
+3. Ejecuta el script de configuración automática:
+   ```powershell
+   python setup_sistema.py
+   ```
+4. El script configurará automáticamente:
+   - Entorno virtual de Python
+   - Dependencias del backend y frontend
+   - Archivos de configuración
+   - Scripts de inicio automático
+5. Sigue las instrucciones en pantalla para completar la configuración.
+
+### Instalación Manual (Método Tradicional)
 
 1. Clona o descarga este repositorio desde GitHub.
 2. Abre una terminal (PowerShell o CMD) y navega hasta la carpeta del proyecto.
@@ -158,9 +175,34 @@ Desarrollar un sistema de visión computacional que permita identificar y trazar
 - API Backend: http://localhost:8000
 
 ## Estado Actual
-- Interfaz web y backend funcionales: permiten subir imágenes, registrar eventos, consultar historial y trayectoria de vagonetas.
-- Procesamiento de imágenes con YOLOv8 y OCR para identificar vagonetas y registrar metadatos.
-- Estructura de base de datos y almacenamiento de imágenes a implementar.
+- ✅ **Modelo NumerosCalados Activo**: Sistema configurado para usar el modelo YOLOv8 entrenado específicamente para números calados
+- ✅ **Interfaz web y backend funcionales**: Permiten subir imágenes, registrar eventos, consultar historial y trayectoria de vagonetas
+- ✅ **Procesamiento de imágenes avanzado**: YOLOv8 + OCR optimizado para identificar vagonetas con números calados
+- ✅ **Sistema de captura automática**: Detección de movimiento inteligente con filtros anti-ruido
+- ✅ **Monitor en tiempo real**: Panel de estadísticas y monitoreo en vivo del sistema
+- ✅ **Base de datos MongoDB**: Almacenamiento estructurado de metadatos y rutas de imágenes
+- 🔄 **Configuración automática**: Script de setup para instalación y configuración del sistema completo
+
+## Mejoras Recientes - Modelo NumerosCalados
+
+### 🧠 **Optimización del Modelo de IA**
+- **Modelo específico**: Migración de NumerosEnteros a **NumerosCalados** para mayor precisión
+- **29 clases detectables**: Entrenado para reconocer números específicos (01, 010, 011, 012, 0123, 013, etc.)
+- **Mayor precisión**: Optimizado específicamente para números calados en vagonetas
+- **Confianza mejorada**: Sistema de scoring para validar la calidad de las detecciones
+
+### 🤖 **Sistema de Captura Automática**
+- **Detección de movimiento inteligente**: Algoritmo MOG2 con filtros anti-ruido
+- **Buffer pre-captura**: Mantiene frames anteriores para mejor análisis
+- **Cooldown inteligente**: Evita detecciones duplicadas en el mismo vehículo
+- **Estadísticas en tiempo real**: Monitoreo de eficiencia y falsos positivos
+- **Configuración flexible**: Ajuste de sensibilidad por cámara
+
+### 📊 **Interfaz Mejorada**
+- **Monitor en tiempo real**: Dashboard con estadísticas en vivo
+- **Control automático**: Panel para iniciar/detener captura automática
+- **Historial enriquecido**: Muestra confianza del modelo y origen de captura
+- **Visualización mejorada**: Indicadores de estado y eficiencia del sistema
 
 ## Mejoras Futuras / Pendientes
 - Integrar reconocimiento automático de modelo de ladrillo (visión computacional).

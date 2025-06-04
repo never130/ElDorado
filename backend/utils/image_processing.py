@@ -61,19 +61,18 @@ class ImageProcessor:
         if model_path is None:
             # Construir la ruta al modelo desde la ubicación de este archivo (backend/utils/image_processing.py)
             # Sube tres niveles para llegar a la raíz del proyecto (ElDorado)
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))            
-            # Construye la ruta al modelo dentro de NumerosCalados - Corrected typo here
-            model_path = os.path.join(project_root, "NumerosCalados", "yolo_model", "training", "best.pt")
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))              # Construye la ruta al modelo dentro de backend/models/numeros_calados
+            model_path = os.path.join(project_root, "backend", "models", "numeros_calados", "yolo_model", "training", "best.pt")
 
         if not os.path.exists(model_path):
             raise FileNotFoundError(
                 f"El archivo del modelo YOLOv8 no se encontró en la ruta: {model_path}. "
-                f"Verifica que el archivo \'best.pt\' exista en \'ElDorado\\NumerosCalados\\yolo_model\\training\\\'.")
+                f"Verifica que el archivo \'best.pt\' exista en \'ElDorado\\backend\\models\\numeros_calados\\yolo_model\\training\\\'.")
         
         print(f"ℹ️ Cargando modelo YOLO desde: {model_path}")
         self.model = YOLO(model_path)
         self.last_detection = None
-        self.min_confidence = 0.5
+        self.min_confidence = 0.25 # <-- Cambiado de 0.5 a 0.25
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """Preprocesa la imagen para mejorar la detección"""
@@ -236,3 +235,80 @@ def detectar_modelo_ladrillo(image_path: str) -> Optional[str]:
     if ladrillo_info and 'tipo' in ladrillo_info:
         return ladrillo_info['tipo']
     return None
+
+def detect_calado_numbers(image: np.ndarray) -> Optional[Dict[str, Any]]:
+    """
+    Detecta números calados directamente usando el modelo NumerosCalados
+    
+    Args:
+        image (np.ndarray): Imagen a procesar
+        
+    Returns:
+        Optional[Dict[str, Any]]: Información de detección con número, confianza y bbox
+    """
+    try:
+        # Realizar detección directa con YOLOv8 usando múltiples configuraciones
+        # para maximizar las posibilidades de detección
+        best_detection = None
+        best_confidence = 0.0
+        
+        # Configuraciones de detección para probar
+        detection_configs = [
+            {"imgsz": 640, "conf": 0.05},   # Configuración estándar con umbral muy bajo
+            {"imgsz": 1280, "conf": 0.05},  # Resolución alta con umbral muy bajo
+            {"imgsz": 320, "conf": 0.01},   # Resolución baja con umbral ultra bajo
+        ]
+        
+        print(f"🔍 Probando {len(detection_configs)} configuraciones de detección...")
+        
+        for i, config in enumerate(detection_configs):
+            try:
+                results = processor.model(image, **config)[0]
+                
+                total_detections = len(results.boxes) if results.boxes is not None else 0
+                if total_detections > 0:
+                    print(f"  Config {i+1} (imgsz={config['imgsz']}, conf={config['conf']}): {total_detections} detecciones")
+                    
+                    # Procesar detecciones de esta configuración
+                    for box in results.boxes:
+                        confidence = float(box.conf[0])
+                        class_id = int(box.cls[0])
+                        class_name = results.names[class_id]
+                        bbox = box.xyxy[0].cpu().numpy()
+                        
+                        print(f"    Detección: '{class_name}' - Confianza: {confidence:.3f}")
+                        
+                        # Quedarse con la detección de mayor confianza
+                        if confidence > best_confidence:
+                            best_confidence = confidence
+                            best_detection = {
+                                'numero': class_name,
+                                'confidence': confidence,
+                                'bbox': bbox.tolist(),
+                                'class_id': class_id,
+                                'config_used': f"imgsz={config['imgsz']}_conf={config['conf']}"
+                            }
+                else:
+                    print(f"  Config {i+1} (imgsz={config['imgsz']}, conf={config['conf']}): 0 detecciones")
+                    
+            except Exception as config_error:
+                print(f"  Config {i+1}: Error - {config_error}")
+                continue
+        
+        if best_detection:
+            print(f"✅ Mejor detección: '{best_detection['numero']}' (confianza: {best_detection['confidence']:.3f}) usando {best_detection['config_used']}")
+            return best_detection
+        else:
+            print("⚠️ No se detectaron números calados en la imagen con ninguna configuración")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error procesando imagen para números calados: {e}")
+        return None
+
+def process_image_calados(image: np.ndarray) -> Optional[Dict[str, Any]]:
+    """
+    Función principal para procesar imágenes con el modelo de números calados
+    Reemplaza a process_image para el sistema de auto-captura
+    """
+    return detect_calado_numbers(image)

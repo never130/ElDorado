@@ -14,22 +14,15 @@ const Navbar = ({ view, setView }) => {
           <span className="block w-7 h-1 bg-cyan-700 mb-1 rounded"></span>
           <span className="block w-7 h-1 bg-cyan-700 mb-1 rounded"></span>
           <span className="block w-7 h-1 bg-cyan-700 rounded"></span>
-        </button>
-        <div className={`w-full md:w-auto flex-col md:flex md:flex-row md:gap-3 md:static absolute top-16 left-0 bg-white md:bg-transparent border-t md:border-none border-cyan-100 shadow md:shadow-none z-10 transition-all duration-200 ${open ? 'flex' : 'hidden'}`}>
-          <button onClick={() => { setView('camera'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'camera' ? 'bg-orange-500 text-white' : 'bg-cyan-100 text-cyan-900 hover:bg-orange-100'} transition text-lg border border-orange-400`}>
-            Cámara Tiempo Real
-          </button>
-          <button onClick={() => { setView('upload'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'upload' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-50 text-cyan-900 hover:bg-orange-50'} transition`}>
-            Subir Imagen
+        </button>        <div className={`w-full md:w-auto flex-col md:flex md:flex-row md:gap-3 md:static absolute top-16 left-0 bg-white md:bg-transparent border-t md:border-none border-cyan-100 shadow md:shadow-none z-10 transition-all duration-200 ${open ? 'flex' : 'hidden'}`}>
+          <button onClick={() => { setView('video-training'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'video-training' ? 'bg-indigo-500 text-white' : 'bg-indigo-100 text-indigo-900 hover:bg-indigo-200'} transition text-lg border border-indigo-400`}>
+            🎬 Video Demo NumerosCalados
           </button>
           <button onClick={() => { setView('historial'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'historial' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-50 text-cyan-900 hover:bg-orange-50'} transition`}>
-            Ver Historial
+            📊 Ver Historial
           </button>
-          <button onClick={() => { setView('trayectoria'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'trayectoria' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-50 text-cyan-900 hover:bg-orange-50'} transition`}>
-            Trayectoria
-          </button>
-          <button onClick={() => { setView('guia'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'guia' ? 'bg-orange-100 text-orange-700' : 'bg-cyan-50 text-cyan-900 hover:bg-orange-50'} transition`}>
-            Guía de Usuario
+          <button onClick={() => { setView('manual'); setOpen(false); }} className={`w-full md:w-auto py-2 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'manual' ? 'bg-purple-500 text-white' : 'bg-purple-100 text-purple-900 hover:bg-purple-200'} transition border border-purple-400`}>
+            📚 Manual de Usuario
           </button>
         </div>
       </div>
