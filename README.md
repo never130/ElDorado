@@ -1,4 +1,4 @@
-# Prácticas Profesionalizantes 2
+# Sistema El Dorado - Detección de Números Calados
 
 **Profesores a Cargo:**
 - Nicolás Caballero
@@ -6,49 +6,65 @@
 - Martín Mirabete
 - Carlos Ghio
 
-# Proyecto - Reconocimiento de Ladrillos Cerámicos
+# Proyecto - Sistema de Detección de Números Calados en Vagonetas
 
-Este proyecto integra visión computacional y aprendizaje profundo para automatizar la identificación y trazabilidad de vagonetas y modelos de ladrillos en una línea de producción de fábrica. El sistema permite registrar, consultar y analizar los movimientos de cada vagoneta, asociando eventos de ingreso y egreso, modelo de ladrillo, merma y trayectoria, facilitando la optimización y control de calidad del proceso productivo.
+Este proyecto integra visión computacional avanzada y aprendizaje profundo (YOLOv8) para automatizar la detección y reconocimiento de números calados en vagonetas de carga en tiempo real. El sistema utiliza inteligencia artificial para procesar video en vivo, detectar números automáticamente y registrar todas las detecciones en una base de datos MongoDB para análisis posterior.
 
-## 📂 Estructura del Repositorio
+## 🎯 Características Principales
+
+- **🤖 Detección Automática con IA**: Modelo YOLOv8 entrenado específicamente para números calados
+- **📹 Procesamiento de Video en Tiempo Real**: Análisis continuo de video con detección automática
+- **🗄️ Base de Datos MongoDB**: Almacenamiento persistente de todas las detecciones
+- **🌐 Interfaz Web Moderna**: Frontend React con video streaming en vivo
+- **📊 Historial Completo**: Consulta y análisis de detecciones históricas
+- **📚 Manual de Usuario Integrado**: Guía completa accesible desde la interfaz
+
+## 📂 Estructura del Proyecto
 
 ```
 ElDorado/
-│   README.md                # Documentación general, visión, requerimientos y guía de uso
+│   README.md                # Documentación general del proyecto
 │
-├── backend/                 # Backend: API, procesamiento de imágenes, conexión a MongoDB
-│   ├── main.py              # Punto de entrada FastAPI, define los endpoints principales
-│   ├── crud.py              # Funciones CRUD para la base de datos
-│   ├── database.py          # Configuración y conexión a MongoDB
+├── backend/                 # 🚀 Backend FastAPI con IA
+│   ├── main.py              # Servidor principal con endpoints de video streaming
+│   ├── crud.py              # Operaciones de base de datos
+│   ├── database.py          # Configuración MongoDB
 │   ├── schemas.py           # Modelos de datos
-│   ├── requirements.txt     # Dependencias Python necesarias
-│   ├── README.md            # Documentación específica del backend
-│   └── utils/               # Utilidades para procesamiento de imágenes y video
-│       ├── camera_capture.py    # Captura y procesamiento de video/cámaras
-│       ├── image_processing.py  # Detección de vagonetas y placas, clasificación de ladrillos
-│       └── ocr.py               # Reconocimiento de caracteres (OCR) en placas
+│   ├── requirements.txt     # Dependencias Python
+│   ├── README.md            # Documentación del backend
+│   ├── models/              # 🤖 Modelos de IA organizados
+│   │   ├── numeros_calados/ # Modelo YOLOv8 para números calados
+│   │   │   └── yolo_model/
+│   │   │       ├── dataset/
+│   │   │       │   └── CarroNcalados800.mp4  # Video de demostración
+│   │   │       └── training/
+│   │   │           └── best.pt              # Modelo entrenado
+│   │   └── numeros_enteros/ # Modelo adicional para números enteros
+│   └── utils/               # 🔧 Utilidades especializadas
+│       ├── auto_capture_system.py    # Sistema de captura automática
+│       ├── image_processing.py       # Procesamiento con YOLO
+│       ├── camera_capture.py         # Manejo de cámaras/video
+│       └── ocr.py                   # OCR complementario
 │
-├── frontend/                # Frontend: interfaz web en React
-│   ├── package.json         # Dependencias y scripts de React
-│   ├── postcss.config.js    # Configuración de PostCSS
-│   ├── tailwind.config.js   # Configuración de Tailwind CSS
-│   ├── README.md            # Documentación específica del frontend
-│   ├── public/              # Archivos públicos y estáticos
-│   │   ├── favicon.ico      # Icono de la app
+├── frontend/                # 🌐 Frontend React moderno
+│   ├── package.json         # Dependencias React
+│   ├── tailwind.config.js   # Configuración Tailwind CSS
+│   ├── README.md            # Documentación del frontend
+│   ├── public/              # Archivos estáticos
 │   │   ├── index.html       # HTML principal
-│   │   ├── logo.jpg         # Logo de la empresa
-│   │   
-│   │   
-│   │   
-│   │   
-│   │   
-│   └── src/                 # Código fuente de React
-│       ├── App.js           # Componente principal de la app
-│       ├── App.css          # Estilos globales
-│       ├── index.js         # Punto de entrada de React
-│       ├── index.css        # Estilos base
-│       └── components/      # Componentes reutilizables
-│           ├── CameraCapture.js     # Captura de imágenes desde cámara
+│   │   └── logo.jpg         # Logo del proyecto
+│   └── src/                 # 📱 Código fuente React
+│       ├── App.js           # Aplicación principal
+│       ├── index.js         # Punto de entrada
+│       ├── components/      # Componentes especializados
+│       │   ├── VideoPlayer.js           # Reproductor de video streaming
+│       │   ├── VideoTrainingMonitor.js  # Monitor de detecciones IA
+│       │   ├── ManualUsuario.js         # Manual integrado
+│       │   ├── Historial.js             # Historial de detecciones
+│       │   └── Navbar.js                # Navegación principal
+│       └── config/
+│           └── api.js       # Configuración de endpoints
+```
 │           ├── CameraCapture.css    # Estilos de cámara
 │           ├── GuiaUsuario.js       # Guía de usuario integrada
 │           ├── Historial.js         # Tabla de historial de registros
@@ -181,7 +197,20 @@ Desarrollar un sistema de visión computacional que permita identificar y trazar
 - ✅ **Sistema de captura automática**: Detección de movimiento inteligente con filtros anti-ruido
 - ✅ **Monitor en tiempo real**: Panel de estadísticas y monitoreo en vivo del sistema
 - ✅ **Base de datos MongoDB**: Almacenamiento estructurado de metadatos y rutas de imágenes
+- ✅ **Manual de Usuario Integrado**: Documentación educativa completa accesible desde la interfaz web
 - 🔄 **Configuración automática**: Script de setup para instalación y configuración del sistema completo
+
+### 📚 **Manual de Usuario Integrado**
+El sistema ahora incluye un manual completo accesible directamente desde la interfaz web:
+
+- **🔢 Sistema de Numeración**: Explicación detallada de números calados vs números enteros
+- **🚀 Guía de Inicio Rápido**: Instrucciones paso a paso para comenzar a usar el sistema
+- **📖 Casos de Uso**: Ejemplos prácticos de diferentes escenarios de detección
+- **🔧 Resolución de Problemas**: Guía de troubleshooting para errores comunes
+- **❓ Preguntas Frecuentes**: FAQ con respuestas a consultas habituales
+- **⚙️ Especificaciones Técnicas**: Detalles sobre hardware, software y configuración
+
+**Acceso**: Hacer clic en el botón "📚 Manual de Usuario" en la barra de navegación superior.
 
 ## Mejoras Recientes - Modelo NumerosCalados
 

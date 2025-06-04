@@ -1,30 +1,35 @@
-# Backend - Seguimiento de Vagonetas
+# 🔧 Backend - Sistema de Detección de Números Calados
 
-Este backend implementa la lógica de procesamiento de imágenes y videos para identificar vagonetas, reconocer su número y clasificar el modelo de ladrillo, registrando toda la información relevante en MongoDB.
+Este backend implementa un sistema avanzado de visión computacional para la detección automática de números calados en vagonetas utilizando modelos YOLO especializados, con procesamiento en tiempo real y registro completo en MongoDB.
 
-## ¿Para qué sirve?
-Permite recibir imágenes de vagonetas, procesarlas con visión computacional y registrar automáticamente los datos clave de cada movimiento en la fábrica de ladrillos.
+## 🎯 ¿Para qué sirve?
+- **Detección Automática**: Identifica números calados en vagonetas mediante modelos YOLO entrenados específicamente
+- **Procesamiento en Tiempo Real**: Captura desde cámaras y procesa videos/imágenes instantáneamente
+- **Sistema de Captura Inteligente**: Implementa cooldown automático para evitar duplicados
+- **Registro Completo**: Almacena metadatos, imágenes procesadas y trayectorias en MongoDB
 
-## Tecnologías Usadas y Para Qué Sirve Cada Una
-- **FastAPI:** Define la API REST para recibir imágenes, videos y exponer endpoints de consulta.
-- **Uvicorn:** Ejecuta la aplicación FastAPI.
-- **MongoDB:** Almacena los registros de eventos, metadatos y rutas de imágenes.
-- **PyMongo:** Permite la conexión y operaciones con MongoDB.
-- **OpenCV:** Procesa imágenes y videos, detecta vagonetas y recorta regiones de interés.
-- **Ultralytics YOLOv8:** Detecta automáticamente vagonetas y placas en imágenes/videos.
-- **Tesseract OCR:** Extrae el número de chapa de las vagonetas.
-- **python-dotenv:** Maneja variables de entorno para configuración flexible.
-- **aiofiles:** Manipula archivos de forma asíncrona.
-- **python-multipart:** Soporta formularios y archivos subidos vía HTTP.
+## 🛠️ Tecnologías Usadas y Para Qué Sirve Cada Una
+- **FastAPI:** Framework moderno para crear APIs REST de alto rendimiento con documentación automática
+- **Uvicorn:** Servidor ASGI para ejecutar aplicaciones FastAPI con soporte para async/await
+- **MongoDB:** Base de datos NoSQL para almacenar registros de detecciones, metadatos e imágenes
+- **PyMongo:** Driver oficial de Python para operaciones con MongoDB
+- **OpenCV (cv2):** Biblioteca de visión computacional para procesamiento de imágenes y videos
+- **Ultralytics YOLOv8:** Modelos de detección especializados para números calados y enteros
+- **Tesseract OCR:** Motor de reconocimiento óptico de caracteres como fallback
+- **python-dotenv:** Gestión de variables de entorno para configuración flexible
+- **aiofiles:** Manejo asíncrono de archivos para mejor rendimiento
+- **python-multipart:** Soporte para formularios multipart y carga de archivos
 
-## Flujo de Procesamiento
-1. El usuario sube una imagen o video desde el frontend.
-2. El backend procesa el archivo:
-   - Detecta la vagoneta y recorta la placa.
-   - Aplica OCR para extraer el número.
-   - Clasifica el modelo de ladrillo (visión computacional).
-   - Registra el evento en MongoDB.
-3. El usuario puede consultar los registros desde el frontend.
+## 🔄 Flujo de Procesamiento Especializado
+1. **Captura**: El sistema recibe imágenes/videos desde frontend o cámaras físicas
+2. **Detección YOLO**: Aplica modelos especializados para detectar números calados
+3. **Procesamiento Inteligente**: 
+   - Recorta regiones de interés usando detecciones YOLO
+   - Aplica filtros y mejoras de calidad
+   - Implementa sistema de cooldown para evitar duplicados
+4. **Extracción de Datos**: Utiliza OCR como fallback si YOLO no detecta texto
+5. **Registro Completo**: Almacena en MongoDB con timestamps, confianza y metadatos
+6. **Respuesta**: Retorna resultados estructurados al frontend
 
 ## Instalación manual
 
@@ -73,35 +78,51 @@ DETECTION_COOLDOWN=5
 uvicorn main:app --reload
 ```
 
-## Endpoints principales
-- `POST /upload/` — Sube imagen, procesa y guarda metadatos
-- `POST /upload-multiple/` — Sube varias imágenes en una sola petición
-- `POST /cameras/start` — Inicia captura desde cámara
-- `POST /cameras/stop/{camera_id}` — Detiene una cámara
-- `GET /cameras/status` — Estado de cámaras activas
-- `GET /vagonetas/` — Consulta historial, filtra por número y fecha
-- `GET /trayectoria/{numero}` — Eventos de una vagoneta ordenados por fecha
+## 📋 Endpoints principales
+- `POST /upload/` — Procesa imagen individual con detección de números calados
+- `POST /upload-multiple/` — Procesamiento por lotes de múltiples imágenes
+- `POST /upload-video/` — Análisis completo de videos con detección frame por frame
+- `POST /cameras/start` — Inicia captura automática desde cámaras físicas
+- `POST /cameras/stop/{camera_id}` — Detiene captura específica de cámara
+- `GET /cameras/status` — Estado en tiempo real de todas las cámaras activas
+- `GET /vagonetas/` — Consulta historial con filtros por número, fecha y confianza
+- `GET /trayectoria/{numero}` — Seguimiento temporal de vagoneta específica
+- `GET /stats/` — Estadísticas de detecciones y rendimiento del sistema
 
-## Estructura de archivos
+## 📁 Estructura de archivos
 ```
 backend/
-├── main.py              # Punto de entrada y API
-├── crud.py             # Operaciones de base de datos
-├── database.py         # Configuración MongoDB
-├── schemas.py          # Modelos de datos
-├── init_db.py          # Inicialización de DB
-├── requirements.txt    # Dependencias
+├── main.py                 # Punto de entrada FastAPI y definición de endpoints
+├── crud.py                # Operaciones CRUD optimizadas para MongoDB
+├── database.py            # Configuración y conexión a MongoDB
+├── schemas.py             # Modelos Pydantic para validación de datos
+├── init_db.py             # Inicialización de base de datos e índices
+├── requirements.txt       # Dependencias del proyecto
+├── models/                # 🆕 Modelos YOLO especializados
+│   ├── numeros_calados/   # Modelo para detección de números calados
+│   │   └── yolo_model/
+│   │       └── training/
+│   │           └── best.pt
+│   └── numeros_enteros/   # Modelo para números enteros (futuro)
+│       └── yolo_model/
+│           └── training/
+│               └── best.pt
 └── utils/
-    ├── camera_capture.py   # Manejo de cámaras
-    ├── image_processing.py # Procesamiento de imágenes
-    └── ocr.py             # OCR para números
+    ├── camera_capture.py      # Sistema de captura desde cámaras físicas
+    ├── image_processing.py    # Procesamiento avanzado con YOLO
+    ├── auto_capture_system.py # Sistema automático con cooldown
+    └── ocr.py                # OCR con Tesseract como fallback
 ```
 
-## Base de datos
-- MongoDB local en `mongodb://localhost:27017`
-- Base de datos: `vagonetas_db`
-- Colección principal: `vagonetas`
+## 🗄️ Base de datos # EN DESARROLLO
+- **MongoDB local**: `mongodb://localhost:27017`
+- **Base de datos**: `vagonetas_db`
+- **Colección principal**: `vagonetas`
+- **Campos especializados**:
+  - `numero_detectado`: Número extraído por YOLO
+  - `confianza_deteccion`: Nivel de confianza del modelo
+  - `tipo_deteccion`: "yolo" o "ocr_fallback"
+  - `coordenadas_bbox`: Bounding box de la detección
+  - `metadatos_modelo`: Información del modelo utilizado
 
-## Documentación
-- Accede a la documentación interactiva en http://localhost:8000/docs
-- Prueba los endpoints directamente desde la interfaz Swagger
+## 📚 Documentación EN DESARROLLO
