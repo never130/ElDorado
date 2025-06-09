@@ -26,7 +26,8 @@
 ### **Paso 1: Iniciar Backend**
 ```powershell
 cd "c:\Users\NEVER\OneDrive\Documentos\VSCode\MisProyectos\app_imagenes\backend"
-python main.py
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+
 ```
 **Deberías ver:**
 ```
@@ -34,7 +35,7 @@ python main.py
 INFO:     Uvicorn running on http://127.0.0.1:8000
 ```
 
-### **Paso 2: Iniciar Frontend**
+### **Paso 2: Iniciar Frontend (abrir otra terminal)**
 ```powershell
 cd "c:\Users\NEVER\OneDrive\Documentos\VSCode\MisProyectos\app_imagenes\frontend"
 npm start
@@ -114,5 +115,4 @@ print('Confianza:', processor.min_confidence)
 - ✅ **Error 422 solucionado** - Validación de formularios corregida  
 - ✅ **Sistema estable** - Manejo de errores mejorado
 - 🔄 **Frontend compatible** - No requiere cambios adicionales
-
-**¡El modelo "números enteros" está listo para producción! 🎉**
+- ❌ Investigar y corregir el error del frontend 'NoneType' object has no attribute 'ndim'
