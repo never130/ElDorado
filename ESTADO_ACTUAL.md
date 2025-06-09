@@ -115,4 +115,4 @@ print('Confianza:', processor.min_confidence)
 - ✅ **Error 422 solucionado** - Validación de formularios corregida  
 - ✅ **Sistema estable** - Manejo de errores mejorado
 - 🔄 **Frontend compatible** - No requiere cambios adicionales
-- ❌ Investigar y corregir el error del frontend 'NoneType' object has no attribute 'ndim'
+- ❌ **Investigar y corregir el error del frontend** 'NoneType' object has no attribute 'ndim'
