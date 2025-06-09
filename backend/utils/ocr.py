@@ -4,8 +4,12 @@ import pytesseract
 import re
 from typing import Optional
 
-def preprocess_for_ocr(image: np.ndarray) -> np.ndarray:
+def preprocess_for_ocr(image: np.ndarray) -> Optional[np.ndarray]:
     """Preprocesa una imagen para mejorar el OCR"""
+    if image is None or not isinstance(image, np.ndarray) or image.size == 0:
+        print("Error en preprocess_for_ocr: La imagen de entrada es None, no es un array numpy o está vacía.")
+        return None
+
     # Convertir a escala de grises
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
@@ -33,8 +37,16 @@ def validate_number(text: str) -> Optional[str]:
 
 def extract_number_from_image(image: np.ndarray) -> Optional[str]:
     """Extrae el número de una imagen de placa"""
+    if image is None or not isinstance(image, np.ndarray) or image.size == 0:
+        print("Error en extract_number_from_image: La imagen de entrada es None, no es un array numpy o está vacía.")
+        return None
+
     # Preprocesar imagen
     processed = preprocess_for_ocr(image)
+    
+    if processed is None:
+        print("Error en extract_number_from_image: Falló el preprocesamiento de la imagen.")
+        return None
     
     # Configurar Tesseract para números
     custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789'

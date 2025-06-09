@@ -22,58 +22,133 @@ const Trayectoria = () => {
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto bg-white rounded-2xl p-6 flex flex-col items-center border border-cyan-200 mt-4 mb-8 transition">
-      <h2 className="text-2xl font-extrabold text-orange-600 mb-4 tracking-wider uppercase text-center">
-        Trayectoria de Vagoneta
-      </h2>
-      <form onSubmit={handleBuscar} className="w-full flex flex-col md:flex-row gap-4 items-center mb-4">
-        <input
-          type="text"
-          placeholder="Número de vagoneta"
-          value={numero}
-          onChange={e => setNumero(e.target.value)}
-          className="flex-1 px-3 py-2 border border-cyan-300 rounded-lg bg-cyan-50 text-cyan-900 font-medium placeholder-cyan-400 focus:outline-none focus:ring-2 focus:ring-orange-400"
-        />
-        <button type="submit" className="py-2 px-6 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition disabled:bg-cyan-300 disabled:cursor-not-allowed shadow-md tracking-wider text-lg">
-          Buscar
-        </button>
+    <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl p-8 shadow-lg mt-6 mb-8 border border-cyan-200">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-extrabold text-orange-600 mb-2">
+          🛤️ Consultar Trayectoria de Vagoneta
+        </h2>
+        <p className="text-gray-600">
+          Ingresa el número de una vagoneta para ver su historial completo de movimientos
+        </p>
+      </div>
+
+      <form onSubmit={handleBuscar} className="max-w-md mx-auto mb-8">
+        <div className="flex gap-3">
+          <input
+            type="text"
+            placeholder="Número de vagoneta (ej: 1234)"
+            value={numero}
+            onChange={e => setNumero(e.target.value)}
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 text-center text-lg font-mono"
+          />
+          <button 
+            type="submit" 
+            disabled={!numero.trim() || loading}
+            className="px-6 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg"
+          >
+            {loading ? '🔍' : '🔍 Buscar'}
+          </button>
+        </div>
       </form>
-      {loading && <p className="text-cyan-700 font-semibold text-center animate-pulse">Buscando...</p>}
-      {error && <p className="text-red-600 text-center font-bold animate-bounce">{error}</p>}
+
+      {/* Estado de carga */}
+      {loading && (
+        <div className="text-center py-8">
+          <div className="animate-spin h-8 w-8 border-4 border-orange-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Buscando trayectoria...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center mb-6">
+          <div className="text-red-600 font-semibold">❌ {error}</div>
+          <p className="text-red-500 text-sm mt-2">
+            Verifica que el número de vagoneta sea correcto
+          </p>
+        </div>
+      )}
+
+      {/* Resultados */}
       {registros.length > 0 && (
-        <div className="w-full overflow-x-auto mt-6">
-          <table className="min-w-full bg-white border border-cyan-200 rounded-xl shadow text-cyan-900 text-base">
-            <thead className="bg-cyan-100">
-              <tr>
-                <th className="px-4 py-2 font-bold text-orange-600">#</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Evento</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Imagen</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Fecha y Hora</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Túnel</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Modelo</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">% Merma</th>
-              </tr>
-            </thead>
-            <tbody>
-              {registros.map((r, idx) => (
-                <tr key={idx} className={r.evento === "ingreso" ? "bg-green-50" : "bg-cyan-50"}>
-                  <td className="px-4 py-2 border-b font-bold">{idx + 1}</td>
-                  <td className={`px-4 py-2 border-b font-bold ${r.evento === "ingreso" ? "text-green-700" : "text-cyan-700"}`}>
-                    {r.evento.charAt(0).toUpperCase() + r.evento.slice(1)}
-                  </td>
-                  <td className="px-4 py-2 border-b">
-                    <img src={`http://localhost:8000/${r.imagen_path}`} alt="vagoneta" width={80} className="rounded-md shadow" />
-                  </td>
-                  <td className="px-4 py-2 border-b">{new Date(r.timestamp).toLocaleString()}</td>
-                  <td className="px-4 py-2 border-b">{r.tunel || "-"}</td>
-                  <td className="px-4 py-2 border-b">{r.modelo_ladrillo || "-"}</td>
-                  <td className="px-4 py-2 border-b">{r.merma !== undefined && r.merma !== null ? `${r.merma}%` : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-4 text-center">
-            <span className="font-bold text-cyan-700">Total de eventos: {registros.length}</span>
+        <div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <h3 className="text-lg font-bold text-green-800 mb-2">
+              ✅ Trayectoria encontrada para la vagoneta #{numero}
+            </h3>
+            <p className="text-green-700">
+              Se encontraron {registros.length} registro{registros.length > 1 ? 's' : ''} de movimiento
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evento</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Imagen</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y Hora</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Túnel</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {registros.map((registro, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {index + 1}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          registro.evento === 'ingreso' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {registro.evento === 'ingreso' ? '🟢 Ingreso' : '🔴 Egreso'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {registro.imagen_path ? (
+                          <img 
+                            src={`http://localhost:8000/${registro.imagen_path}`}
+                            alt="vagoneta"
+                            className="h-12 w-16 object-cover rounded border border-gray-200"
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-sm">Sin imagen</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {new Date(registro.timestamp).toLocaleString('es-ES')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {registro.tunel || <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {registro.merma && (
+                          <div className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded mb-1">
+                            Merma: {registro.merma}%
+                          </div>
+                        )}
+                        {registro.modelo_ladrillo && (
+                          <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            {registro.modelo_ladrillo}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-6 text-center bg-gray-50 p-4 rounded-lg">
+              <p className="text-gray-700 font-semibold">
+                📊 Total de registros: <span className="text-orange-600">{registros.length}</span>
+              </p>
+            </div>
           </div>
         </div>
       )}

@@ -5,13 +5,13 @@ const RealTimeMonitor = () => {
   const [recentDetections, setRecentDetections] = useState([]);
   const [systemStats, setSystemStats] = useState({});
   const [autoStatus, setAutoStatus] = useState('stopped');
+  const [modelInfo, setModelInfo] = useState(null);
 
   useEffect(() => {
     const interval = setInterval(fetchData, 2000); // Actualizar cada 2 segundos
     fetchData();
     return () => clearInterval(interval);
   }, []);
-
   const fetchData = async () => {
     try {
       // Obtener detecciones recientes
@@ -24,6 +24,12 @@ const RealTimeMonitor = () => {
       const statusRes = await axios.get('http://localhost:8000/auto-capture/status');
       setAutoStatus(statusRes.data.status);
       setSystemStats(statusRes.data.statistics || {});
+
+      // Obtener información del modelo (solo la primera vez)
+      if (!modelInfo) {
+        const modelRes = await axios.get('http://localhost:8000/model/info');
+        setModelInfo(modelRes.data);
+      }
     } catch (error) {
       console.error('Error fetching real-time data:', error);
     }
@@ -171,8 +177,35 @@ const RealTimeMonitor = () => {
                       Falsos +: {stats.false_positives}
                     </div>
                   </div>
+                </div>              ))}
+            </div>
+          )}
+
+          {/* Información del Modelo IA */}
+          {modelInfo && (
+            <div className="mt-6">
+              <h3 className="text-lg font-bold text-purple-800 mb-3">
+                🧠 Modelo IA Activo
+              </h3>
+              <div className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-purple-500">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="font-semibold text-purple-700">Tipo:</span> {modelInfo.model_type}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-purple-700">Clases:</span> {modelInfo.classes_count}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-purple-700">Confianza:</span> {modelInfo.confidence_threshold}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-purple-700">Épocas:</span> {modelInfo.training_epochs}
+                  </div>
                 </div>
-              ))}
+                <div className="mt-3 text-xs text-gray-600">
+                  Dataset: {modelInfo.dataset}
+                </div>
+              </div>
             </div>
           )}
         </div>

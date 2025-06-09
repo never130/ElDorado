@@ -1,8 +1,10 @@
 fastapi
+uvicorn[standard]
 aiofiles
 python-dotenv
 python-multipart
 pymongo
 opencv-python
+numpy
 ultralytics
 pytesseract

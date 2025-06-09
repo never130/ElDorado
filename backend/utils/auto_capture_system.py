@@ -290,11 +290,11 @@ class AutoCaptureManager:
 # Configuración de cámaras y videos
 CAMERAS_CONFIG = [
     {
-        'camera_id': 'video_demo_calados',
-        'camera_url': r'c:\Users\Ever\VSCode\ElDorado\backend\models\numeros_calados\yolo_model\dataset\CarroNcalados800.mp4',
+        'camera_id': 'video_demo_enteros',
+        'camera_url': r'c:\Users\NEVER\OneDrive\Documentos\VSCode\MisProyectos\app_imagenes\backend\models\numeros_enteros\yolo_model\dataset\CarroNenteros800.mp4',
         'source_type': 'video',  # video, camera, rtsp
         'evento': 'ingreso',
-        'tunel': 'Demo Túnel - Números Calados',
+        'tunel': 'Demo Túnel - Números Enteros',
         'roi': None,
         'motion_sensitivity': 0.2,  # Más sensible para video
         'min_motion_area': 3000,   # Área mínima menor para demo

@@ -9,20 +9,116 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import shutil
 import os
+import tempfile
+import glob
+import uvicorn
+import asyncio
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 import crud
-from utils.image_processing import detectar_vagoneta_y_placa, detectar_modelo_ladrillo
+from utils.image_processing import detectar_vagoneta_y_placa, detectar_vagoneta_y_placa_mejorado, detectar_modelo_ladrillo
 from utils.ocr import extract_number_from_image # Changed from ocr_placa_img
 from utils.camera_capture import CameraCapture
 from utils.auto_capture_system import AutoCaptureManager, CAMERAS_CONFIG
 from database import connect_to_mongo, close_mongo_connection, get_database
 import cv2
 import numpy as np
+from collections import Counter
 from schemas import VagonetaCreate, VagonetaInDB
 import asyncio
 import base64
 import io
+from utils.image_processing import processor
+
+# Función para procesar videos MP4
+async def procesar_video_mp4(video_path: str) -> Optional[str]: # Asegurar que Optional se importa de typing
+    """
+    Procesa un video MP4 frame por frame para detectar números de vagonetas
+    Retorna el primer número detectado con alta confianza
+    """
+    try:
+        print(f"📹 Iniciando procesamiento de video: {video_path}")
+
+        cap = cv2.VideoCapture(video_path)
+
+        if not cap.isOpened():
+            raise ValueError(f"No se pudo abrir el video: {video_path}")
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        print(f"📊 Video info: {total_frames} frames, {fps:.2f} FPS")
+
+        frame_count = 0
+        frames_to_skip = max(1, int(fps // 3))
+        max_frames = min(50, total_frames // frames_to_skip)
+
+        numeros_detectados = []
+
+        while cap.isOpened() and frame_count < max_frames:
+            for _ in range(frames_to_skip):
+                ret_skip = cap.read()[0]
+                if not ret_skip:
+                    break
+            if not cap.isOpened() or not ret_skip:
+                break
+
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            print(f"🔍 Procesando frame {frame_count + 1}/{max_frames}")
+
+            try:
+                cropped_placa_img, bbox_vagoneta, bbox_placa, numero, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+
+                if numero and numero.strip():
+                    numeros_detectados.append(numero.strip())
+                    print(f"✅ Número detectado en frame {frame_count}: {numero}")
+
+                    if len(numeros_detectados) >= 3:
+                        ultimo_numero = numeros_detectados[-1]
+                        count_ultimo = numeros_detectados[-10:].count(ultimo_numero)
+                        if count_ultimo >= 3:
+                            print(f"🏁 Detección consistente de '{ultimo_numero}', finalizando procesamiento de video.")
+                            cap.release()
+                            return ultimo_numero
+                else:
+                    print(f"❌ No se detectó número en frame {frame_count}")
+
+            except Exception as frame_error:
+                import traceback
+                print(f"⚠️ Error procesando frame {frame_count}: {str(frame_error)}")
+                traceback.print_exc()
+
+            frame_count += 1
+
+        cap.release()
+
+        if numeros_detectados:
+            numero_mas_comun = max(set(numeros_detectados), key=numeros_detectados.count)
+            frecuencia = numeros_detectados.count(numero_mas_comun)
+            print(f"📈 Números detectados: {numeros_detectados}")
+            print(f"🏆 Número más común: {numero_mas_comun} (detectado {frecuencia} veces)")
+            return numero_mas_comun
+        else:
+            print("❌ No se detectó ningún número en todo el video")
+            return None
+
+    except Exception as e:
+        import traceback
+        print(f"💥 Error GRANDE procesando video: {str(e)}")
+        traceback.print_exc()
+        return None
+
+# Función auxiliar para convertir string a float
+def parse_merma(merma_str: str) -> Optional[float]:
+    """Convierte string de merma a float, manejando cadenas vacías"""
+    if not merma_str or merma_str.strip() == "":
+        return None
+    try:
+        return float(merma_str)
+    except (ValueError, TypeError):
+        return None
 
 # Inicializa la app FastAPI
 app = FastAPI(
@@ -73,7 +169,7 @@ async def upload_image(
     file: UploadFile = File(...),
     tunel: str = Form(None),
     evento: str = Form(...),
-    merma: float = Form(None),
+    merma: str = Form(None),
     metadata: Optional[Dict] = Form(None)
 ):
     # Validar y guardar imagen
@@ -82,11 +178,10 @@ async def upload_image(
     save_path = UPLOAD_DIR / f"{timestamp}_{file.filename}"
     
     with save_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # Procesar imagen
+        shutil.copyfileobj(file.file, buffer)    # Procesar imagen
     try:
-        cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado = detectar_vagoneta_y_placa(str(save_path))
+        # NUEVA: Usar detección mejorada con agrupación de números compuestos
+        cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado = detectar_vagoneta_y_placa_mejorado(str(save_path))
         
         if not numero_detectado:
             try:
@@ -96,9 +191,7 @@ async def upload_image(
             return JSONResponse(
                 {"message": "No se detectó vagoneta con número", "status": "ignored"},
                 status_code=200
-            )
-
-        # Detectar modelo
+            )        # Detectar modelo
         modelo_ladrillo = detectar_modelo_ladrillo(str(save_path))
         
         # Crear registro
@@ -109,7 +202,7 @@ async def upload_image(
             tunel=tunel,
             evento=evento,
             modelo_ladrillo=modelo_ladrillo,
-            merma=merma,
+            merma=parse_merma(merma),
             metadata=metadata
         )
         
@@ -131,23 +224,49 @@ async def upload_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload-multiple/")
-async def upload_images(
+async def upload_files(
     files: List[UploadFile] = File(...),
     tunel: str = Form(None),
     evento: str = Form(...),
-    merma: float = Form(None),
+    merma: str = Form(None),
     metadata: Optional[Dict] = Form(None)
 ):
     results = []
     for file in files:
         try:
+            # Validar tipo de archivo
+            if not file.content_type:
+                results.append({
+                    "filename": file.filename,
+                    "status": "error",
+                    "error": "Tipo de contenido no detectado"
+                })
+                continue
+                
+            # Verificar si es imagen o video
+            is_image = file.content_type.startswith('image/')
+            is_video = file.content_type.startswith('video/') and file.content_type in ['video/mp4', 'video/avi', 'video/mov', 'video/quicktime']
+            
+            if not (is_image or is_video):
+                results.append({
+                    "filename": file.filename,
+                    "status": "error",
+                    "error": f"Tipo de archivo no soportado: {file.content_type}. Solo se permiten imágenes y videos MP4/AVI/MOV."
+                })
+                continue
+            
             timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
             save_path = UPLOAD_DIR / f"{timestamp}_{file.filename}"
-            
+              # Guardar archivo
             with save_path.open("wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado = detectar_vagoneta_y_placa(str(save_path))
+            if is_image:
+                # Procesar imagen
+                cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado = detectar_vagoneta_y_placa_mejorado(str(save_path))
+            else:
+                # Procesar video
+                numero_detectado = await procesar_video_mp4(str(save_path))
             
             if not numero_detectado:
                 try:
@@ -170,7 +289,7 @@ async def upload_images(
                 tunel=tunel,
                 evento=evento,
                 modelo_ladrillo=modelo_ladrillo,
-                merma=merma,
+                merma=parse_merma(merma),
                 metadata=metadata
             )
             
@@ -399,225 +518,339 @@ async def update_auto_capture_config(new_config: dict):
     except Exception as e:
         return {"status": "error", "message": f"Error al actualizar configuración: {str(e)}"}
 
-@app.get("/model/info")
+@app.get("/model/info",
+    summary="Información del modelo",
+    description="Obtiene información detallada del modelo YOLOv8 NumerosCalados en uso.")
 async def get_model_info():
-    """Obtiene información sobre el modelo NumerosCalados activo"""
+    """Obtiene información del modelo actual"""
+    try:
+        model_info = {
+            "model_type": "YOLOv8 NumerosCalados",
+            "model_path": processor.model.model_path if hasattr(processor.model, 'model_path') else "best.pt",
+            "classes_count": len(processor.model.names),
+            "classes": list(processor.model.names.values()),
+            "confidence_threshold": processor.min_confidence,
+            "model_size": "~14MB",
+            "last_updated": "2024-12-01",
+            "training_epochs": 150,
+            "image_size": 1280,
+            "dataset": "NewCarro_NumCal_v8 (Roboflow)"
+        }
+        return model_info
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo información del modelo: {str(e)}")
+
+@app.post("/model/config",
+    summary="Configurar modelo",
+    description="Actualiza la configuración del modelo de detección.")
+async def update_model_config(config: dict):
+    """Actualiza configuración del modelo"""
+    try:
+        if "min_confidence" in config:
+            processor.min_confidence = float(config["min_confidence"])
+        
+        # Aquí puedes agregar más configuraciones según necesites
+        # Por ejemplo, si implementas parámetros configurables en el processor
+        
+        return {
+            "message": "Configuración actualizada exitosamente",
+            "new_config": {
+                "min_confidence": processor.min_confidence,
+                **config
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error actualizando configuración: {str(e)}")
+
+@app.get("/model/test",
+    summary="Probar modelo",
+    description="Realiza una prueba del modelo con una imagen de ejemplo.")
+async def test_model():
+    """Prueba el modelo con datos de ejemplo"""
+    try:
+        # Podrías implementar una prueba con una imagen de ejemplo
+        test_results = {
+            "status": "ok",
+            "model_loaded": processor.model is not None,
+            "classes_available": len(processor.model.names),
+            "confidence_threshold": processor.min_confidence,
+            "test_timestamp": datetime.utcnow().isoformat()
+        }
+        return test_results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en prueba del modelo: {str(e)}")
+
+# --- ENDPOINTS ADMINISTRATIVOS ---
+
+@app.post("/admin/load-seed-data")
+async def load_seed_data():
+    """Cargar datos desde detecciones.json"""
+    try:
+        from database import load_detections_from_json_to_db_async
+        count = await load_detections_from_json_to_db_async()
+        return {"status": "success", "message": f"Se cargaron {count} registros exitosamente"}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Archivo detecciones.json no encontrado")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al cargar datos: {str(e)}")
+
+@app.get("/model/evaluate")
+async def evaluate_model():
+    """Evalúa el rendimiento del modelo actual"""
     try:
         from utils.image_processing import processor
         
-        # Información del modelo
-        model_info = {
-            "model_type": "YOLOv8 NumerosCalados",
-            "model_path": str(processor.model.model_path if hasattr(processor.model, 'model_path') else "backend/models/numeros_calados/yolo_model/training/best.pt"),
+        # Obtener estadísticas básicas del modelo
+        model_stats = {
+            "model_type": "YOLOv8 NumerosCalados + Agrupación Mejorada",
             "confidence_threshold": processor.min_confidence,
-            "classes_count": len(processor.model.names) if hasattr(processor.model, 'names') else 29,
-            "supported_classes": list(processor.model.names.values()) if hasattr(processor.model, 'names') else [
-                "01", "010", "011", "012", "0123", "013", "014", "015", "016", "017", 
-                "018", "019", "02", "020", "0256", "03", "030", "04", "040", "05", 
-                "050", "06", "060", "07", "070", "08", "080", "09", "090"
-            ],
-            "optimized_for": "Números calados en vagonetas",
-            "training_dataset": "newcarro_numcal_v8"
+            "agrupacion_activada": True,
+            "clases_soportadas": len(processor.model.names) if hasattr(processor.model, 'names') else 29,
+            "ultima_deteccion": processor.last_detection
         }
-        
-        return {"status": "success", "model_info": model_info}
-    except Exception as e:
-        return {"status": "error", "message": f"Error obteniendo información del modelo: {str(e)}"}
-
-@app.get("/system/stats")
-async def get_system_stats():
-    """Obtiene estadísticas generales del sistema"""
-    try:
-        # Obtener conexión a la base de datos
-        db = get_database()
         
         # Obtener estadísticas de la base de datos
-        total_detections = db.vagonetas.count_documents({})
-        auto_detections = db.vagonetas.count_documents({"auto_captured": True})
-        manual_detections = total_detections - auto_detections
+        db = get_database()
+        total_detections = await db.vagonetas.count_documents({})
         
-        # Estadísticas por evento
-        ingreso_count = db.vagonetas.count_documents({"evento": "ingreso"})
-        egreso_count = db.vagonetas.count_documents({"evento": "egreso"})
+        # Calcular métricas si hay detecciones recientes
+        if total_detections > 0:
+            # Obtener confianza promedio de las últimas 100 detecciones
+            pipeline = [
+                {"$match": {"confidence": {"$exists": True}}},
+                {"$sort": {"timestamp": -1}},
+                {"$limit": 100},
+                {"$group": {"_id": None, "avg_confidence": {"$avg": "$confidence"}}}
+            ]
+            avg_confidence_result = list(await db.vagonetas.aggregate(pipeline).to_list(length=1))
+            avg_confidence = avg_confidence_result[0]["avg_confidence"] if avg_confidence_result else 0
+            
+            model_stats.update({
+                "metricas_recientes": {
+                    "total_detecciones": total_detections,
+                    "confianza_promedio": round(avg_confidence, 3),
+                    "precision_estimada": "Pendiente implementar",
+                    "recall_estimado": "Pendiente implementar"
+                }
+            })
         
-        # Estadísticas por fecha (últimos 7 días)
-        from datetime import datetime, timedelta
-        week_ago = datetime.now() - timedelta(days=7)
-        recent_detections = db.vagonetas.count_documents({
-            "timestamp": {"$gte": week_ago}
-        })
+        return {"status": "success", "model_evaluation": model_stats}
         
-        # Modelo con mejor confianza promedio
-        pipeline = [
-            {"$match": {"confidence": {"$exists": True}}},
-            {"$group": {"_id": None, "avg_confidence": {"$avg": "$confidence"}}}
-        ]
-        avg_confidence_result = list(db.vagonetas.aggregate(pipeline))
-        avg_confidence = avg_confidence_result[0]["avg_confidence"] if avg_confidence_result else 0
-        
-        stats = {
-            "total_detections": total_detections,
-            "auto_detections": auto_detections,
-            "manual_detections": manual_detections,
-            "ingreso_count": ingreso_count,
-            "egreso_count": egreso_count,
-            "recent_detections_7d": recent_detections,
-            "average_confidence": round(avg_confidence, 3) if avg_confidence else 0,
-            "automation_rate": round((auto_detections / total_detections * 100), 1) if total_detections > 0 else 0
+    except Exception as e:
+        return {"status": "error", "message": f"Error evaluando modelo: {str(e)}"}
+
+@app.get("/model/config")
+async def get_model_config():
+    """Obtiene la configuración actual del modelo"""
+    try:
+        from utils.image_processing import processor
+        config = {
+            "confidence_threshold": processor.min_confidence,
+            "model_path": "backend/models/numeros_enteros/yolo_model/training/best.pt",
+            "agrupacion_enabled": True,
+            "umbral_agrupacion": 50,  # Default
+            "filtros_calidad": {
+                "min_area": 100,
+                "min_confidence": 0.3,
+                "aspect_ratio_range": [0.3, 3.0]
+            }
         }
         
-        return {"status": "success", "stats": stats}
+        return {"status": "success", "config": config}
+        
     except Exception as e:
-        return {"status": "error", "message": f"Error obteniendo estadísticas: {str(e)}"}
+        return {"status": "error", "message": f"Error obteniendo configuración: {str(e)}"}
 
-# --- ENDPOINTS DE VIDEO STREAMING ---
-
-@app.get("/video/stream/{camera_id}")
-async def video_stream(camera_id: str):
-    """Stream de video en tiempo real para el frontend"""
-    
-    def generate_frames():
-        # Buscar la cámara en el sistema de auto-captura
-        camera = None
-        
-        if auto_capture_manager:
-            for cam in auto_capture_manager.cameras:
-                if cam.camera_id == camera_id:
-                    camera = cam
-                    break
-        
-        if not camera or not camera.cap:
-            # Si no hay cámara activa, crear una temporal para streaming
-            video_path = r'c:\Users\Ever\VSCode\ElDorado\backend\models\numeros_calados\yolo_model\dataset\CarroNcalados800.mp4'
-            if os.path.exists(video_path):
-                cap = cv2.VideoCapture(video_path)
-            else:
-                return b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + b'\r\n'
-        else:
-            cap = camera.cap
-        
-        frame_count = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                # Reiniciar video si es demo
-                if camera_id == 'video_demo_calados':
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                else:
-                    break
-            
-            # Redimensionar frame para streaming eficiente
-            frame = cv2.resize(frame, (640, 480))
-            
-            # Codificar frame como JPEG
-            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            frame_bytes = buffer.tobytes()
-            
-            # Formato multipart para streaming
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
-            frame_count += 1
-            # Limitar FPS para streaming
-            if frame_count % 3 == 0:  # Solo cada 3er frame para reducir bandwidth
-                continue
-    
-    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
-
-@app.get("/video/frame/{camera_id}")
-async def get_video_frame(camera_id: str):
-    """Obtiene un frame individual del video como base64"""
+@app.put("/model/config")
+async def update_model_config(new_config: dict):
+    """Actualiza la configuración del modelo"""
     try:
-        # Buscar la cámara en el sistema de auto-captura        camera = None
-        if auto_capture_manager:
-            for cam in auto_capture_manager.cameras:
-                if cam.camera_id == camera_id:
-                    camera = cam
-                    break
+        from utils.image_processing import processor
         
-        if not camera or not camera.cap:
-            # Si no hay cámara activa, usar video demo
-            video_path = r'c:\Users\Ever\VSCode\ElDorado\backend\models\numeros_calados\yolo_model\dataset\CarroNcalados800.mp4'
-            if os.path.exists(video_path):
-                cap = cv2.VideoCapture(video_path)
-                ret, frame = cap.read()
-                cap.release()
-                if not ret:
-                    raise HTTPException(status_code=404, detail="No se pudo obtener frame del video")
+        if "confidence_threshold" in new_config:
+            new_threshold = float(new_config["confidence_threshold"])
+            if 0.1 <= new_threshold <= 1.0:
+                processor.min_confidence = new_threshold
             else:
-                raise HTTPException(status_code=404, detail="Video demo no encontrado")
-        else:
-            ret, frame = camera.cap.read()
-            if not ret:
-                raise HTTPException(status_code=404, detail="No se pudo obtener frame de la cámara")
+                raise ValueError("confidence_threshold debe estar entre 0.1 y 1.0")
         
-        # Redimensionar y codificar
-        frame = cv2.resize(frame, (480, 360))
-        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        return {"status": "success", "message": "Configuración actualizada", "new_config": new_config}
         
-        # Convertir a base64
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+    except Exception as e:
+        return {"status": "error", "message": f"Error actualizando configuración: {str(e)}"}
+
+@app.post("/test/detection")
+async def test_detection_with_sample():
+    """Prueba la detección con imagen de muestra"""
+    try:
+        # Podrías implementar una prueba con una imagen de ejemplo
+        sample_image_path = r"c:\\Users\\NEVER\\OneDrive\\Documentos\\VSCode\\MisProyectos\\app_imagenes\\backend\\models\\numeros_enteros\\yolo_model\\dataset"
+        
+        # Buscar archivos de imagen en el directorio
+        import glob
+        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
+        sample_files = []
+        
+        for ext in image_extensions:
+            sample_files.extend(glob.glob(os.path.join(sample_image_path, ext)))
+            sample_files.extend(glob.glob(os.path.join(sample_image_path, "**", ext), recursive=True))
+        
+        if not sample_files:
+            return {"status": "error", "message": "No se encontraron imágenes de muestra"}
+        
+        # Usar la primera imagen encontrada
+        test_image = sample_files[0]
+        
+        from utils.image_processing import detectar_vagoneta_y_placa_mejorado
+        
+        # Probar detección mejorada
+        # Actualizado para desempaquetar 5 valores
+        cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(test_image)
+        
+        result = {
+            "status": "success",
+            "test_image": os.path.basename(test_image),
+            "numero_detectado": numero_detectado,
+            "confianza_placa": confianza_placa, # Añadido
+            "bbox_placa": bbox_placa.tolist() if bbox_placa is not None else None,
+            "bbox_vagoneta": bbox_vagoneta.tolist() if bbox_vagoneta is not None else None,
+            "deteccion_exitosa": numero_detectado is not None
+        }
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en prueba de detección: {str(e)}")
+
+@app.post("/debug/test-detection")
+async def debug_test_detection(file: UploadFile = File(...)):
+    """Endpoint de debug para probar detección en imagen específica"""
+    try:
+        # Guardar imagen temporal
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        temp_path = UPLOAD_DIR / f"debug_{timestamp}_{file.filename}"
+        
+        with temp_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        print(f"🔍 DEBUG: Procesando imagen {temp_path}")
+        
+        # Probar detección mejorada
+        numero_detectado_mejorado = None
+        bbox_vagoneta_mejorado = None
+        bbox_placa_mejorado = None
+        confianza_placa_mejorado = None # Añadido
+        try:
+            # Actualizado para desempaquetar 5 valores
+            cropped_placa_img_mejorado, bbox_vagoneta_mejorado, bbox_placa_mejorado, numero_detectado_mejorado, confianza_placa_mejorado = detectar_vagoneta_y_placa_mejorado(str(temp_path))
+            print(f"📊 DEBUG: Resultado detección mejorada: {numero_detectado_mejorado}, Confianza: {confianza_placa_mejorada}")
+        except Exception as e:
+            print(f"❌ DEBUG: Error en detección mejorada: {str(e)}")
+            # Asegurar que todas las variables tienen un valor asignado en caso de error
+            cropped_placa_img_mejorado = None 
+            # bbox_vagoneta_mejorado ya está inicializado a None
+            # bbox_placa_mejorado ya está inicializado a None
+            # numero_detectado_mejorado ya está inicializado a None
+            # confianza_placa_mejorado ya está inicializado a None
+        
+        # Probar detección estándar como respaldo
+        numero_estandar = None
+        confianza_placa_estandar = None # Añadido
+        bbox_vagoneta_std = None # Inicializar
+        bbox_placa_std = None    # Inicializar
+        try:
+            # Actualizado para desempaquetar 5 valores
+            cropped_placa_std, bbox_vagoneta_std, bbox_placa_std, numero_estandar, confianza_placa_estandar = detectar_vagoneta_y_placa(str(temp_path))
+            print(f"📊 DEBUG: Resultado detección estándar: {numero_estandar}, Confianza: {confianza_placa_estandar}")
+        except Exception as e:
+            print(f"❌ DEBUG: Error en detección estándar: {str(e)}")
+            # Asegurar que todas las variables tienen un valor asignado
+            cropped_placa_std = None
+            # bbox_vagoneta_std ya está inicializado a None
+            # bbox_placa_std ya está inicializado a None
+            # numero_estandar ya está inicializado a None
+            # confianza_placa_estandar ya está inicializado a None
+
+        # Limpiar archivo temporal
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+        
+        return {
+            "status": "debug_complete",
+            "filename": file.filename,
+            "deteccion_mejorada": {
+                "numero": numero_detectado_mejorado,
+                "confianza_placa": confianza_placa_mejorada, # Añadido
+                "bbox_vagoneta": bbox_vagoneta_mejorado.tolist() if bbox_vagoneta_mejorado is not None else None,
+                "bbox_placa": bbox_placa_mejorado.tolist() if bbox_placa_mejorado is not None else None
+            },
+            "deteccion_estandar": {
+                "numero": numero_estandar,
+                "confianza_placa": confianza_placa_estandar, # Añadido
+                "bbox_vagoneta": bbox_vagoneta_std.tolist() if bbox_vagoneta_std is not None else None, # Añadido para consistencia
+                "bbox_placa": bbox_placa_std.tolist() if bbox_placa_std is not None else None       # Añadido para consistencia
+            },
+            "model_info": {
+                "confidence_threshold": processor.min_confidence,
+                "model_classes": len(processor.model.names)
+            }
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/debug/test-sample-video")
+async def debug_test_sample_video():
+    """Prueba la detección con el video de muestra del dataset"""
+    try:
+        sample_video_path = r"c:\Users\NEVER\OneDrive\Documentos\VSCode\MisProyectos\app_imagenes\backend\models\numeros_enteros\yolo_model\dataset\CarroNenteros800.mp4"
+        
+        if not os.path.exists(sample_video_path):
+            return {"status": "error", "message": "Video de muestra no encontrado"}
+        
+        print(f"🎬 Probando video de muestra: {sample_video_path}")
+        
+        # Procesar video
+        numero_detectado = await procesar_video_mp4(sample_video_path)
+        
+        return {
+            "status": "test_complete",
+            "sample_video": "CarroNenteros800.mp4",
+            "numero_detectado": numero_detectado,
+            "model_config": {
+                "confidence_threshold": processor.min_confidence,
+                "model_path": "numeros_enteros/yolo_model/training/best.pt",
+                "classes_count": len(processor.model.names)
+            }
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/debug/adjust-confidence")
+async def debug_adjust_confidence(new_confidence: float):
+    """Ajusta dinámicamente el umbral de confianza del modelo"""
+    try:
+        if not (0.01 <= new_confidence <= 1.0):
+            return {"status": "error", "message": "La confianza debe estar entre 0.01 y 1.0"}
+        
+        old_confidence = processor.min_confidence
+        processor.min_confidence = new_confidence
+        
+        print(f"🔧 Confianza ajustada: {old_confidence} → {new_confidence}")
         
         return {
             "status": "success",
-            "frame": f"data:image/jpeg;base64,{frame_base64}",
-            "camera_id": camera_id,
-            "timestamp": datetime.now().isoformat()
+            "message": f"Confianza ajustada de {old_confidence} a {new_confidence}",
+            "old_confidence": old_confidence,
+            "new_confidence": new_confidence
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo frame: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
-@app.get("/video/info/{camera_id}")
-async def get_video_info(camera_id: str):
-    """Obtiene información del video/cámara"""
-    try:
-        # Buscar configuración de la cámara
-        camera_config = None
-        for config in CAMERAS_CONFIG:
-            if config['camera_id'] == camera_id:
-                camera_config = config
-                break
-        
-        if not camera_config:
-            raise HTTPException(status_code=404, detail="Cámara no encontrada")
-        
-        video_info = {
-            "camera_id": camera_id,
-            "source_type": camera_config.get('source_type', 'unknown'),
-            "evento": camera_config.get('evento', ''),
-            "tunel": camera_config.get('tunel', ''),
-            "demo_mode": camera_config.get('demo_mode', False),
-            "is_active": False,
-            "frame_count": 0,
-            "total_frames": 0,
-            "fps": 0
-        }
-        
-        # Si es video, obtener información adicional
-        if camera_config.get('source_type') == 'video' and os.path.exists(camera_config['camera_url']):
-            cap = cv2.VideoCapture(camera_config['camera_url'])
-            video_info.update({
-                "total_frames": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
-                "fps": cap.get(cv2.CAP_PROP_FPS),
-                "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                "duration_seconds": int(cap.get(cv2.CAP_PROP_FRAME_COUNT) / cap.get(cv2.CAP_PROP_FPS))
-            })
-            cap.release()
-        
-        # Verificar si está activa en auto-captura
-        if auto_capture_manager:
-            for cam in auto_capture_manager.cameras:
-                if cam.camera_id == camera_id:
-                    video_info.update({
-                        "is_active": cam.is_running,
-                        "frame_count": cam.video_frame_count if hasattr(cam, 'video_frame_count') else 0
-                    })
-                    break
-        
-        return {"status": "success", "video_info": video_info}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo información del video: {str(e)}")
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
