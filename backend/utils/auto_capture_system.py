@@ -10,7 +10,7 @@ import asyncio
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-from .image_processing import process_image, detect_calado_numbers
+from .image_processing import process_image
 from crud import create_vagoneta_record
 import os
 
@@ -194,11 +194,7 @@ class SmartCameraCapture:
         frames_to_analyze = self.pre_capture_buffer[-3:] + [frame]
         
         for test_frame in frames_to_analyze:
-            # Usar función de detección apropiada según el tipo de cámara
-            if 'calados' in self.camera_id.lower():
-                detection = detect_calado_numbers(test_frame)
-            else:
-                detection = process_image(test_frame)
+            detection = process_image(test_frame) # Simplificado para usar siempre process_image
             
             if detection and detection.get('numero'):
                 if not best_detection or detection.get('confidence', 0) > best_detection.get('confidence', 0):
