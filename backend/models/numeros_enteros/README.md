@@ -1,85 +1,72 @@
-Numeros Enteros - Detección con YOLOv8
+# Modelo YOLOv8 para Detección de Números de Vagonetas
 
-Descripción Este módulo implementa un modelo YOLOv8 entrenado para la detección de números enteros en carros. Utiliza un dataset optimizado de Roboflow y genera resultados en videos procesados, permitiendo análisis en tiempo real o por lotes.
+## Descripción
+Este directorio contiene el modelo YOLOv8 entrenado para la detección de números en vagonetas. El modelo (`best.pt`) es utilizado por el backend para identificar vagonetas y extraer sus números a partir de imágenes o frames de video.
 
-Estructura del Proyecto
+## Estructura del Directorio del Modelo
+```
+numeros_enteros/
+├── README.md               # Este archivo
+└── yolo_model/
+    ├── dataset/            # Archivos relacionados con el dataset original (si se incluyen)
+    │   ├── CarroNenteros800.mp4 # Ejemplo de video usado en el dataset
+    │   ├── README.dataset.txt   # Info del dataset
+    │   └── README.roboflow.txt  # Info de Roboflow (si aplica)
+    ├── detection/            # Scripts para pruebas de detección (si se incluyen)
+    │   └── detect_video.py
+    ├── result/               # Resultados de pruebas de detección (si se incluyen)
+    │   ├── detecciones.json
+    │   └── video_prueba.mp4
+    └── training/             # Archivos de entrenamiento
+        ├── best.pt           # El modelo entrenado final que usa la aplicación
+        └── data.yaml         # Archivo de configuración del dataset para YOLO
+        # train.py            # Script de entrenamiento (si se incluye)
+```
 
-NumerosEnteros/
+**Nota:** El archivo principal utilizado por la aplicación backend es `training/best.pt`. Los otros archivos (dataset, scripts de detección/entrenamiento) son más relevantes para el proceso de desarrollo y re-entrenamiento del modelo.
 
-┣ dataset/ # Dataset de entrenamiento
+## Uso por el Backend
+El archivo `backend/utils/image_processing.py` carga este modelo (`best.pt`) para realizar las detecciones. La configuración del modelo, como el umbral de confianza, puede ser ajustada a través de la API del backend.
 
-┃ ┣ CarroNenteros800.mp4 # Video original con números calados
+## Re-entrenamiento del Modelo (Opcional)
 
-┃ ┣ readme.dataset # Descripción del dataset
+Si se necesita re-entrenar el modelo con un nuevo dataset:
 
-┣ training/ # Código de entrenamiento
+1.  **Preparar el Dataset**:
+    *   Asegúrate de que tu dataset esté en el formato esperado por YOLOv8.
+    *   Actualiza el archivo `data.yaml` (ubicado generalmente junto al script de entrenamiento o en la carpeta del dataset) para que apunte a las rutas correctas de tus imágenes de entrenamiento y validación, y defina las clases.
 
-┃ ┣ train.py # Script para entrenar YOLOv8
+2.  **Instalar `ultralytics`**:
+    ```bash
+    pip install ultralytics
+    ```
 
-┃ ┣ data.yaml # Configuración del dataset
+3.  **Ejecutar el Entrenamiento**:
+    Un script de entrenamiento típico (`train.py`) podría verse así:
+    ```python
+    from ultralytics import YOLO
 
-┃ ┣ best.pt # Modelo YOLOv8 entrenado
+    # Cargar un modelo base (ej. yolov8n.pt) o continuar desde un checkpoint
+    model = YOLO("yolov8n.pt") # o model = YOLO("ruta/a/best.pt") para continuar
 
-┣ detection/ # Código de inferencia
+    # Entrenar el modelo
+    results = model.train(
+        data="ruta/a/tu/data.yaml", # Ruta al archivo de configuración del dataset
+        epochs=150,                 # Número de épocas
+        imgsz=1280,                 # Tamaño de imagen
+        project="runs/train",       # Directorio para guardar los resultados del entrenamiento
+        name="exp_nuevo_entrenamiento" # Nombre del experimento
+    )
 
-┃ ┣ detect_video.py # Detección en videos
+    # El mejor modelo se guardará en "runs/train/exp_nuevo_entrenamiento/weights/best.pt"
+    # Luego, puedes copiar este `best.pt` a `backend/models/numeros_enteros/yolo_model/training/best.pt`
+    # para que la aplicación lo utilice.
+    ```
+    Ajusta los parámetros (`data`, `epochs`, `imgsz`, `project`, `name`) según tus necesidades.
 
-┣ results/ # Datos generados tras la detección
+4.  **Actualizar el Modelo en la Aplicación**:
+    Una vez que el entrenamiento haya finalizado y estés satisfecho con el nuevo `best.pt`, reemplaza el archivo existente en `backend/models/numeros_enteros/yolo_model/training/best.pt` con el nuevo modelo generado.
 
-┃ ┣ detecciones.json # Resultados en formato JSON
-
-┃ ┣ video_prueba.mp4 # Video con detección aplicada
-
-┣ readme.rpbpflow # Información sobre el dataset en Roboflow
-
-Instalación y Requisitos
-
-Antes de ejecutar el código, asegúrate de tener Python 3.8+, ultralytics y OpenCV instalados:
-
-bash
-
-pip install ultralytics opencv-python pymongo
-
-Entrenamiento del Modelo
-
-Para entrenar YOLOv8 con el dataset de Roboflow, ejecuta:
-
-python
-
-from ultralytics import YOLO
-
-modelo = YOLO("yolov8n.pt") # Cargar modelo base
-modelo.train(data="dataset/data.yaml", epochs=150, imgsz=1280, project="runs", name="train_final")
-Esto generará un modelo optimizado en training/best.pt.
-
-Detección en Video
-
-Para ejecutar la detección en un video con YOLOv8:
-
-python
-
-from ultralytics import YOLO
-
-modelo = YOLO("training/best.pt")
-modelo.predict(source="dataset/CarroNenteros800.mp4", conf=0.7, save=True, project="results", name="detect_final")
-
-Esto generará el video procesado en results/video_prueba.mp4.
-
-Guardar Detecciones en MongoDB
-
-Si deseas almacenar los datos de detección en MongoDB, usa este script:
-
-python
-import pymongo
-import json
-
-cliente = pymongo.MongoClient("mongodb://localhost:27017/")
-db = cliente["deteccion_numeros"]
-coleccion = db["resultados"]
-
-with open("results/detecciones.json", "r") as file:
-detecciones = json.load(file)
-
-coleccion.insert_many(detecciones)
-
-print("Detecciones almacenadas en MongoDB.")
+## Consideraciones
+- El rendimiento de la detección depende de la calidad del dataset de entrenamiento y de los parámetros de entrenamiento.
+- El archivo `best.pt` es el único estrictamente necesario en este directorio para que el backend funcione con el modelo pre-entrenado. Los demás archivos son para referencia o para facilitar el re-entrenamiento.

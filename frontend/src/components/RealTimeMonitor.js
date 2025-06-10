@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Added useRef
 import axios from 'axios';
 
 const RealTimeMonitor = () => {
@@ -6,34 +6,106 @@ const RealTimeMonitor = () => {
   const [systemStats, setSystemStats] = useState({});
   const [autoStatus, setAutoStatus] = useState('stopped');
   const [modelInfo, setModelInfo] = useState(null);
+  const [isConnected, setIsConnected] = useState(false); // WebSocket connection status
+  const ws = useRef(null); // WebSocket reference
 
-  useEffect(() => {
-    const interval = setInterval(fetchData, 2000); // Actualizar cada 2 segundos
-    fetchData();
-    return () => clearInterval(interval);
-  }, []);
-  const fetchData = async () => {
+  // Function to fetch initial data (like model info and initial history)
+  const fetchInitialData = async () => {
     try {
-      // Obtener detecciones recientes
+      // Obtener información del modelo (solo la primera vez o si no está)
+      if (!modelInfo) {
+        const modelRes = await axios.get('http://localhost:8000/model/info');
+        setModelInfo(modelRes.data);
+      }
+      // Obtener estado del sistema automático inicial
+      const statusRes = await axios.get('http://localhost:8000/auto-capture/status');
+      setAutoStatus(statusRes.data.status);
+      setSystemStats(statusRes.data.statistics || {});
+
+      // Obtener un historial inicial de detecciones
       const recentRes = await axios.get('http://localhost:8000/vagonetas/', {
         params: { limit: 10, order: 'desc' }
       });
       setRecentDetections(recentRes.data.slice(0, 10));
 
-      // Obtener estado del sistema automático
-      const statusRes = await axios.get('http://localhost:8000/auto-capture/status');
-      setAutoStatus(statusRes.data.status);
-      setSystemStats(statusRes.data.statistics || {});
-
-      // Obtener información del modelo (solo la primera vez)
-      if (!modelInfo) {
-        const modelRes = await axios.get('http://localhost:8000/model/info');
-        setModelInfo(modelRes.data);
-      }
     } catch (error) {
-      console.error('Error fetching real-time data:', error);
+      console.error('Error fetching initial data:', error);
     }
   };
+
+  useEffect(() => {
+    fetchInitialData(); // Fetch initial data on component mount
+
+    // WebSocket connection URL
+    const wsUrl = 'ws://localhost:8000/ws/detections';
+
+    function connectWebSocket() {
+      ws.current = new WebSocket(wsUrl);
+
+      ws.current.onopen = () => {
+        console.log('WebSocket Connected');
+        setIsConnected(true);
+        // Optionally, fetch current auto-capture status upon connection
+        // to ensure UI consistency if status changed while disconnected.
+        axios.get('http://localhost:8000/auto-capture/status')
+          .then(statusRes => {
+            setAutoStatus(statusRes.data.status);
+            setSystemStats(statusRes.data.statistics || {});
+          })
+          .catch(err => console.error('Error fetching status on WS connect:', err));
+      };
+
+      ws.current.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        console.log('WebSocket Message:', message);
+
+        if (message.type === 'new_detection') {
+          setRecentDetections(prevDetections => 
+            [message.data, ...prevDetections].slice(0, 10) // Add to top, keep last 10
+          );
+          // Optionally update system stats if the message contains them or fetch them
+          // For now, we assume new_detection might imply a change in stats, so we refetch.
+          // A more optimized approach would be for the backend to send updated stats with the detection.
+          axios.get('http://localhost:8000/auto-capture/status')
+            .then(statusRes => {
+                setAutoStatus(statusRes.data.status); // Update status as well
+                setSystemStats(statusRes.data.statistics || {});
+            })
+            .catch(err => console.error('Error fetching status on new detection:', err));
+
+        } else if (message.type === 'system_status') { // Example: if backend sends status updates
+            setAutoStatus(message.data.status);
+            setSystemStats(message.data.statistics || {});
+        }
+        // Potentially handle other message types, e.g., for auto-capture status changes directly
+      };
+
+      ws.current.onclose = () => {
+        console.log('WebSocket Disconnected');
+        setIsConnected(false);
+        // Attempt to reconnect after a delay
+        setTimeout(connectWebSocket, 5000); // Reconnect every 5 seconds
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        // onclose will be called next, which handles reconnection
+      };
+    }
+
+    connectWebSocket();
+
+    // Cleanup WebSocket connection when component unmounts
+    return () => {
+      if (ws.current) {
+        ws.current.close();
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Removed modelInfo from dependencies, fetchInitialData is stable or should be memoized if complex.
+
+  // The fetchData function is no longer needed for polling recentDetections or autoStatus if WS is primary.
+  // It's kept as fetchInitialData for the first load.
 
   const DetectionCard = ({ detection }) => {
     const timeAgo = (timestamp) => {
@@ -120,10 +192,10 @@ const RealTimeMonitor = () => {
         </h1>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${
-            autoStatus === 'running' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+            isConnected ? (autoStatus === 'running' ? 'bg-green-500 animate-pulse' : 'bg-red-500') : 'bg-yellow-500' // Yellow for connecting/disconnected
           }`}></div>
           <span className="font-semibold">
-            Sistema {autoStatus === 'running' ? 'Activo' : 'Inactivo'}
+            {isConnected ? (autoStatus === 'running' ? 'Sistema Activo' : 'Sistema Inactivo') : 'Conectando...'}
           </span>
         </div>
       </div>
@@ -239,28 +311,28 @@ const RealTimeMonitor = () => {
       {/* Panel de información del modelo */}
       <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
         <h3 className="text-lg font-bold text-cyan-800 mb-4">
-          🧠 Información del Modelo NumerosCalados
+          🧠 Información del Modelo de Detección
         </h3>
         <div className="grid md:grid-cols-3 gap-4 text-sm">
           <div className="bg-cyan-50 rounded p-3">
             <div className="font-semibold text-cyan-700">Modelo Activo</div>
-            <div className="text-cyan-600">YOLOv8 NumerosCalados</div>
+            <div className="text-cyan-600">{modelInfo ? modelInfo.model_type : 'Cargando...'}</div>
             <div className="text-xs text-cyan-500 mt-1">
-              Optimizado para números calados
+              Optimizado para la identificación de vagonetas
             </div>
           </div>
           <div className="bg-green-50 rounded p-3">
             <div className="font-semibold text-green-700">Clases Detectables</div>
-            <div className="text-green-600">29 números diferentes</div>
+            <div className="text-green-600">{modelInfo ? modelInfo.classes_count : '...'} clases</div>
             <div className="text-xs text-green-500 mt-1">
-              01, 010, 011, 012, 0123, etc.
+              Números y/o tipos de vagonetas
             </div>
           </div>
           <div className="bg-orange-50 rounded p-3">
-            <div className="font-semibold text-orange-700">Precisión</div>
-            <div className="text-orange-600">Alta confianza</div>
+            <div className="font-semibold text-orange-700">Confianza Mínima</div>
+            <div className="text-orange-600">{modelInfo ? modelInfo.confidence_threshold : '...'}</div>
             <div className="text-xs text-orange-500 mt-1">
-              Entrenado específicamente para este caso
+              Umbral para considerar una detección válida
             </div>
           </div>
         </div>

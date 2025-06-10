@@ -138,7 +138,7 @@ const Upload = () => {
           📤 Procesar Imágenes de Vagonetas
         </h2>
         <p className="text-gray-600">
-          Sube una o múltiples imágenes para detectar automáticamente números calados
+          Sube una o múltiples imágenes/videos para detectar automáticamente los números de las vagonetas.
         </p>
         {modelInfo && (
           <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">

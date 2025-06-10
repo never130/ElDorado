@@ -2,7 +2,7 @@
 # Autor: [Tu nombre o equipo]
 # Descripción: API REST para subir, procesar y consultar registros de vagonetas usando visión computacional.
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Form, WebSocket, WebSocketDisconnect # Added WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +19,7 @@ import crud
 from utils.image_processing import detectar_vagoneta_y_placa, detectar_vagoneta_y_placa_mejorado, detectar_modelo_ladrillo
 from utils.ocr import extract_number_from_image # Changed from ocr_placa_img
 from utils.camera_capture import CameraCapture
-from utils.auto_capture_system import AutoCaptureManager, CAMERAS_CONFIG
+from utils.auto_capture_system import AutoCaptureManager, load_cameras_config # Ensure load_cameras_config is imported
 from database import connect_to_mongo, close_mongo_connection, get_database
 import cv2
 import numpy as np
@@ -28,7 +28,39 @@ from schemas import VagonetaCreate, VagonetaInDB
 import asyncio
 import base64
 import io
-from utils.image_processing import processor
+from utils.image_processing import processor # Import the processor instance
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        print(f"WebSocket connection established: {websocket.client}")
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        print(f"WebSocket connection closed: {websocket.client}")
+
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+    async def broadcast_json(self, data: dict):
+        # Ensure datetime objects are serialized
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+        
+        for connection in self.active_connections:
+            await connection.send_json(data)
+
+manager = ConnectionManager()
 
 # Función para procesar videos MP4
 async def procesar_video_mp4(video_path: str) -> Optional[str]: # Asegurar que Optional se importa de typing
@@ -158,6 +190,7 @@ active_cameras: Dict[str, CameraCapture] = {}
 # Variable global para el sistema de captura automática
 auto_capture_manager = None
 auto_capture_task = None
+CAMERAS_CONFIG = load_cameras_config() # Load camera configs here
 
 # --- ENDPOINTS PRINCIPALES ---
 
@@ -450,13 +483,14 @@ def health():
 @app.post("/auto-capture/start")
 async def start_auto_capture():
     """Inicia el sistema de captura automática"""
-    global auto_capture_manager, auto_capture_task
+    global auto_capture_manager, auto_capture_task # manager is already global
     
     if auto_capture_task and not auto_capture_task.done():
         return {"status": "error", "message": "El sistema de captura automática ya está en ejecución"}
     
     try:
-        auto_capture_manager = AutoCaptureManager(CAMERAS_CONFIG)
+        # Pass the WebSocket manager to the AutoCaptureManager
+        auto_capture_manager = AutoCaptureManager(CAMERAS_CONFIG, manager)
         auto_capture_task = asyncio.create_task(auto_capture_manager.start_all())
         return {"status": "success", "message": "Sistema de captura automática iniciado"}
     except Exception as e:
@@ -499,24 +533,26 @@ async def get_auto_capture_status():
     return {
         "status": status,
         "cameras_configured": len(CAMERAS_CONFIG),
-        "statistics": stats
+        "statistics": stats if stats else {} # Ensure statistics is always present
     }
 
-@app.get("/auto-capture/config")
-async def get_auto_capture_config():
-    """Obtiene la configuración actual de las cámaras"""
-    return {"cameras": CAMERAS_CONFIG}
-
-@app.put("/auto-capture/config")
-async def update_auto_capture_config(new_config: dict):
-    """Actualiza la configuración de las cámaras"""
-    global CAMERAS_CONFIG
+# WebSocket endpoint for real-time detections
+@app.websocket("/ws/detections")
+async def websocket_detections_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
     try:
-        CAMERAS_CONFIG.clear()
-        CAMERAS_CONFIG.extend(new_config.get("cameras", []))
-        return {"status": "success", "message": "Configuración actualizada"}
+        while True:
+            # Keep connection alive, server primarily broadcasts
+            # You could implement receiving messages from client if needed
+            await websocket.receive_text() # Or receive_json
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
     except Exception as e:
-        return {"status": "error", "message": f"Error al actualizar configuración: {str(e)}"}
+        print(f"Error in WebSocket connection: {e}")
+        manager.disconnect(websocket)
+
+
+# --- ENDPOINTS DE INFORMACIÓN Y UTILIDADES ---
 
 @app.get("/model/info",
     summary="Información del modelo",
@@ -742,7 +778,7 @@ async def debug_test_detection(file: UploadFile = File(...)):
         confianza_placa_mejorado = None # Añadido
         try:
             # Actualizado para desempaquetar 5 valores
-            cropped_placa_img_mejorado, bbox_vagoneta_mejorado, bbox_placa_mejorado, numero_detectado_mejorado, confianza_placa_mejorado = detectar_vagoneta_y_placa_mejorado(str(temp_path))
+            cropped_placa_img_mejorado, bbox_vagoneta_mejorado, bbox_placa_mejorado, numero_detectado_mejorado, confianza_placa_mejorada = detectar_vagoneta_y_placa_mejorado(str(temp_path))
             print(f"📊 DEBUG: Resultado detección mejorada: {numero_detectado_mejorado}, Confianza: {confianza_placa_mejorada}")
         except Exception as e:
             print(f"❌ DEBUG: Error en detección mejorada: {str(e)}")
@@ -751,7 +787,7 @@ async def debug_test_detection(file: UploadFile = File(...)):
             # bbox_vagoneta_mejorado ya está inicializado a None
             # bbox_placa_mejorado ya está inicializado a None
             # numero_detectado_mejorado ya está inicializado a None
-            # confianza_placa_mejorado ya está inicializado a None
+            # confianza_placa_mejorada ya está inicializado a None
         
         # Probar detección estándar como respaldo
         numero_estandar = None
