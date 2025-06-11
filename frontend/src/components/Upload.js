@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import Spinner from "./Spinner";
 
@@ -60,11 +60,273 @@ const Upload = () => {
     // Limpiar event sources activos si se cambian los archivos
     Object.values(activeEventSources).forEach(source => source.close());
     setActiveEventSources({});
+    setAllFilesResults([]); // Clear results when files change
   };
 
   const generateFileId = () => `file-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
 
   const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+
+  const checkAllFilesProcessed = useCallback(() => {
+    const allOriginalFileNames = files.map(f => f.name);
+    const processedFileProgressEntries = Object.values(fileProgress).filter(fp => allOriginalFileNames.includes(fp.name));
+
+    const allFilesHaveTerminalStatusInPorgress = processedFileProgressEntries.length === files.length &&
+      processedFileProgressEntries.every(fp =>
+        fp.status === 'completed' || fp.status === 'error' || fp.status === 'ignored'
+      );
+
+    const noActiveEventSources = Object.keys(activeEventSources).length === 0;
+
+    console.log("CheckAllFilesProcessed:", 
+        { allFilesHaveTerminalStatusInPorgress, noActiveEventSources, filesLength: files.length, fileProgressCount: Object.keys(fileProgress).length }
+    );
+    // console.log("Current fileProgress state:", JSON.parse(JSON.stringify(fileProgress)));
+    // console.log("Current allFilesResults state:", JSON.parse(JSON.stringify(allFilesResults)));
+
+    if (allFilesHaveTerminalStatusInPorgress && noActiveEventSources && files.length > 0) {
+      setLoading(false);
+      console.log("All files definitively processed. Generating final feedback.");
+
+      const finalResultsForFeedback = files.map(originalFile => {
+        const fileProgressEntryKey = Object.keys(fileProgress).find(key => fileProgress[key].name === originalFile.name);
+        const associatedFileId = fileProgressEntryKey;
+
+        const resultFromAllResults = allFilesResults.find(res => res.fileId === associatedFileId);
+
+        if (resultFromAllResults) {
+          return {
+            filename: originalFile.name,
+            status: resultFromAllResults.status || 'unknown',
+            numero_detectado: resultFromAllResults.numero_detectado,
+            confianza: resultFromAllResults.confianza,
+            message: resultFromAllResults.message || fileProgress[associatedFileId]?.serverMessage,
+            error: resultFromAllResults.errorDetail || (resultFromAllResults.status === 'error' ? resultFromAllResults.message : undefined)
+          };
+        } else {
+          const progressEntry = fileProgress[associatedFileId];
+          if (progressEntry) {
+            return {
+              filename: originalFile.name,
+              status: progressEntry.status,
+              numero_detectado: progressEntry.result?.numero || progressEntry.result?.numero_detectado,
+              confianza: progressEntry.result?.confianza,
+              message: progressEntry.serverMessage || 'No specific result from server processing.',
+              error: progressEntry.status === 'error' ? progressEntry.serverMessage : undefined
+            };
+          }
+          return { filename: originalFile.name, status: 'unknown', message: 'No processing information found.' };
+        }
+      });
+
+      console.log("Formatted feedback results for UI:", finalResultsForFeedback);
+
+      const okCount = finalResultsForFeedback.filter(r => r.status === "ok" || r.status === "completed").length;
+      const errorCount = finalResultsForFeedback.filter(r => r.status === "error").length;
+      const ignoredCount = finalResultsForFeedback.filter(r => r.status === "ignored").length;
+      const totalAttemptedFiles = files.length;
+
+      let msg = "";
+      if (totalAttemptedFiles === 1 && finalResultsForFeedback.length >= 1) {
+        const result = finalResultsForFeedback[0];
+        if (result.status === "ok" || result.status === "completed") {
+          msg = `✅ ${result.filename}: Procesado.`;
+          if (result.numero_detectado) msg += ` Número: ${result.numero_detectado}`;
+          if (typeof result.confianza === 'number') msg += ` (Confianza: ${(result.confianza * 100).toFixed(1)}%)`;
+        } else if (result.status === "ignored") {
+          msg = `⚠️ ${result.filename}: ${result.message || 'Procesado, pero no se generó un resultado guardable.'}`;
+        } else if (result.status === "error") {
+          msg = `❌ ${result.filename}: Error - ${result.message || result.error || 'Error desconocido'}`;
+        } else {
+          msg = `ℹ️ ${result.filename}: ${result.message || 'Estado: ' + result.status}`;
+        }
+      } else if (totalAttemptedFiles > 0) {
+        msg = `Procesamiento finalizado para ${totalAttemptedFiles} archivo(s). ✅ Detectados: ${okCount}`;
+        if (ignoredCount > 0) msg += `, ⚠️ Sin resultado guardado: ${ignoredCount}`;
+        if (errorCount > 0) msg += `, ❌ Con errores: ${errorCount}`;
+      } else {
+        msg = "No hay archivos para mostrar feedback.";
+      }
+
+      const errorDetails = finalResultsForFeedback
+        .filter(r => r.status === "error" && (r.error || r.message))
+        .map(r => `${r.filename}: ${r.error || r.message || 'Error desconocido'}`)
+        .join('\n');
+
+      setFeedback({
+        status: errorCount > 0 ? "error" : ignoredCount > 0 && okCount === 0 ? "warning" : okCount > 0 ? "success" : "info",
+        message: msg,
+        details: errorDetails ? `Detalles de errores:\n${errorDetails}` : null
+      });
+
+      setAbortController(null);
+    }
+  }, [files, fileProgress, activeEventSources, allFilesResults]);
+
+  const setupEventSource = useCallback((fileId, processingId, filename) => {
+    const eventSource = new EventSource(`http://localhost:8000/stream-video-processing/${processingId}`);
+    setActiveEventSources(prev => ({ ...prev, [fileId]: eventSource }));
+
+    eventSource.onopen = () => {
+      setFileProgress(prev => ({
+        ...prev,
+        [fileId]: { ...prev[fileId], status: 'server_processing', serverMessage: `Conectado al stream para ${filename}...` }
+      }));
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        let serverMessage = data.message || '';
+        let currentProgressState = {};
+        let shouldCloseEventSource = false;
+        let isTerminalEvent = false;
+
+        console.log(`SSE (${fileId} - ${filename}):`, data); // Log para depuración
+
+        if (data.type === 'status' && data.stage === 'stream_init') {
+          serverMessage = data.message || 'Stream iniciado.';
+        } else if (data.type === 'progress') {
+          serverMessage = `${data.message} (${data.current_frame}/${data.total_frames})`;
+        } else if (data.type === 'detection_update') {
+          serverMessage = `Frame ${data.frame}: Detectado ${data.numero} (Confianza: ${(data.confianza * 100).toFixed(1)}%)`;
+        } else if (data.type === 'final_result') {
+          serverMessage = data.message || "Análisis de video completado, esperando registro en BD.";
+          currentProgressState = { resultDataFromStream: data.data }; 
+        } else if (data.type === 'db_record_created') {
+          isTerminalEvent = true;
+          shouldCloseEventSource = true;
+          const recordData = data.data;
+          setAllFilesResults(prevResults => [...prevResults, {
+            fileId,
+            filename,
+            status: 'ok',
+            message: data.message || `Registro creado: ${recordData.numero} (Conf: ${recordData.confianza ? (recordData.confianza * 100).toFixed(1) + '%' : 'N/A'})`,
+            numero_detectado: recordData.numero,
+            confianza: recordData.confianza,
+            // ... any other relevant fields from recordData
+          }]);
+          currentProgressState = {
+            status: 'completed',
+            result: recordData,
+          };
+          serverMessage = data.message || `Registro creado: ${recordData.numero} (Conf: ${recordData.confianza ? (recordData.confianza * 100).toFixed(1) + '%' : 'N/A'})`;
+        } else if (data.type === 'status' && (data.stage === 'completion' || data.stage === 'finalization')) {
+          serverMessage = data.message || 'Proceso completado en servidor.';
+          if (data.message && data.message.includes("no se identificó un número") && !fileProgress[fileId]?.result) {
+            // This is a soft terminal state for this file if no db record is coming.
+            // We'll let stream_end confirm this.
+          }
+        } else if (data.type === 'error') {
+          isTerminalEvent = true;
+          shouldCloseEventSource = true;
+          serverMessage = `Error en stream: ${data.message}`;
+          setAllFilesResults(prevResults => [...prevResults, {
+            fileId,
+            filename,
+            status: 'error',
+            message: serverMessage,
+            errorDetail: data.message
+          }]);
+          currentProgressState = { status: 'error', result: data };
+        } else if (data.type === 'stream_end') {
+          isTerminalEvent = true;
+          shouldCloseEventSource = true;
+          serverMessage = data.message || "Stream finalizado.";
+
+          const existingResultIndex = allFilesResults.findIndex(r => r.fileId === fileId);
+
+          if (existingResultIndex === -1) {
+            const statusToSet = data.error_occurred ? 'error' : 'ignored';
+            setAllFilesResults(prevResults => [...prevResults, {
+              fileId,
+              filename,
+              status: statusToSet,
+              message: data.message || "Stream finalizado.",
+              errorDetail: data.error_occurred ? data.message : undefined
+            }]);
+            currentProgressState = { status: statusToSet, serverMessage: data.message };
+          } else {
+            if (data.error_occurred && allFilesResults[existingResultIndex].status !== 'error') {
+              setAllFilesResults(prevResults => prevResults.map((r, index) =>
+                index === existingResultIndex ? { ...r, status: 'error', message: data.message || "Error reportado al final del stream.", errorDetail: data.message } : r
+              ));
+              currentProgressState = { status: 'error', serverMessage: data.message };
+            } else if (!data.error_occurred && allFilesResults[existingResultIndex].status === 'ok') {
+              currentProgressState = { serverMessage: data.message };
+            } else if (!allFilesResults[existingResultIndex].status && !data.error_occurred) {
+              setAllFilesResults(prevResults => prevResults.map((r, index) =>
+                index === existingResultIndex ? { ...r, status: 'ignored', message: data.message || "Stream finalizado, resultado no concluyente." } : r
+              ));
+              currentProgressState = { status: 'ignored', serverMessage: data.message };
+            } else {
+              currentProgressState = { serverMessage: data.message };
+            }
+          }
+        }
+
+        setFileProgress(prev => ({
+          ...prev,
+          [fileId]: { ...prev[fileId], ...currentProgressState, serverMessage }
+        }));
+        
+        if (shouldCloseEventSource) {
+          eventSource.close();
+          setActiveEventSources(prev => {
+            const newSources = { ...prev };
+            delete newSources[fileId];
+            return newSources;
+          });
+        }
+        
+        if (isTerminalEvent) {
+            checkAllFilesProcessed();
+        }
+
+      } catch (error) {
+        console.error("Error parseando SSE data o actualizando estado:", error, "Data:", event.data);
+        setFileProgress(prev => ({
+          ...prev,
+          [fileId]: { ...prev[fileId], status: 'error', serverMessage: 'Error crítico procesando respuesta del servidor.' }
+        }));
+        eventSource.close();
+        setActiveEventSources(prev => {
+            const newSources = { ...prev };
+            delete newSources[fileId];
+            return newSources;
+        });
+        setAllFilesResults(prevResults => {
+          if (!prevResults.find(r => r.fileId === fileId)) {
+            return [...prevResults, { fileId, filename, status: 'error', message: 'Error crítico procesando respuesta del servidor.', errorDetail: error.message }];
+          }
+          return prevResults;
+        });
+        checkAllFilesProcessed();
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error("EventSource failed for fileId:", fileId, err);
+      setFileProgress(prev => ({
+        ...prev,
+        [fileId]: { ...prev[fileId], status: 'error', serverMessage: `Error de conexión con el stream de ${filename}.` }
+      }));
+      eventSource.close();
+      setActiveEventSources(prev => {
+        const newSources = { ...prev };
+        delete newSources[fileId];
+        return newSources;
+      });
+      // Add a result to allFilesResults to signify this connection error
+      setAllFilesResults(prevResults => {
+        if (!prevResults.find(r => r.fileId === fileId)) {
+            return [...prevResults, { fileId, filename, status: 'error', message: `Error de conexión con el stream de ${filename}.`, errorDetail: 'EventSource onerror' }];
+        }
+        return prevResults;
+      });
+      checkAllFilesProcessed();
+    };
+  }, [checkAllFilesProcessed, allFilesResults, fileProgress]); // Added dependencies
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -73,37 +335,33 @@ const Upload = () => {
     setLoading(true);
     setFeedback(null);
     setOverallProgress(0);
-    setAllFilesResults([]); // MODIFIED: Clear allFilesResults state
-    // Limpiar fileProgress antes de una nueva subida, manteniendo la estructura
+    setAllFilesResults([]);
+    
     const initialFileProgress = {};
     files.forEach(file => {
-        const fileId = generateFileId(); // Generar ID aquí para consistencia
-        initialFileProgress[fileId] = { 
-            name: file.name, 
-            loaded: 0, 
-            total: file.size, 
-            status: 'pending', 
-            serverMessage: '',
-            processingId: null // Añadir para rastrear el ID de procesamiento del video
-        };
+      const fileId = generateFileId();
+      initialFileProgress[fileId] = {
+        name: file.name,
+        loaded: 0,
+        total: file.size,
+        status: 'pending',
+        serverMessage: '',
+        processingId: null
+      };
     });
     setFileProgress(initialFileProgress);
-    
+
     const newAbortController = new AbortController();
     setAbortController(newAbortController);
 
     let totalUploadedSize = 0;
     const totalSizeAllFiles = files.reduce((acc, file) => acc + file.size, 0);
-    
-    // const allFilesResults = []; // REMOVED: No longer a local variable
-    // Usar una copia de las claves de initialFileProgress para iterar,
-    // ya que los fileId se generan una vez al inicio de handleUpload.
     const fileIdsToProcess = Object.keys(initialFileProgress);
 
     for (let i = 0; i < fileIdsToProcess.length; i++) {
       const fileId = fileIdsToProcess[i];
-      const file = files.find(f => f.name === initialFileProgress[fileId].name); // Encontrar el archivo original
-      if (!file) continue; // Si el archivo no se encuentra, saltar
+      const file = files.find(f => f.name === initialFileProgress[fileId].name);
+      if (!file) continue;
 
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       let ChunksUploadedCurrentFile = 0;
@@ -237,200 +495,28 @@ const Upload = () => {
         }
       }
     } // End of loop for files
-
-    checkAllFilesProcessed(); // Verificar si todos los archivos (no SSE) han terminado para potencialmente mostrar feedback.
+    checkAllFilesProcessed();
   };
-
-  const setupEventSource = (fileId, processingId, filename) => {
-    const eventSource = new EventSource(`http://localhost:8000/stream-video-processing/${processingId}`);
-    setActiveEventSources(prev => ({ ...prev, [fileId]: eventSource }));
-
-    eventSource.onopen = () => {
-      setFileProgress(prev => ({
-        ...prev,
-        [fileId]: { ...prev[fileId], status: 'server_processing', serverMessage: `Conectado al stream para ${filename}...` }
-      }));
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        let serverMessage = data.message || '';
-        let currentProgressState = {};
-
-        if (data.type === 'progress') {
-          serverMessage = `${data.message} (${data.current_frame}/${data.total_frames})`;
-        } else if (data.type === 'detection_update') {
-          serverMessage = `Frame ${data.frame}: Detectado ${data.numero} (Confianza: ${(data.confianza * 100).toFixed(1)}%)`;
-        } else if (data.type === 'final_result') {
-          // Este evento solo da los datos, el registro en BD viene después
-          serverMessage = data.message || "Análisis de video completado, esperando registro en BD.";
-          // Podríamos almacenar data.data en fileProgress si es necesario mostrarlo antes del db_record
-        } else if (data.type === 'db_record_created' || data.type === 'no_detection_final' || data.type === 'db_error' || data.type === 'completion_error') {
-          // Estos son eventos terminales para el procesamiento del video
-          // allFilesResults.push({ fileId, ...data }); // MODIFIED: Update state instead
-          setAllFilesResults(prevResults => [...prevResults, { fileId, ...data }]);
-          currentProgressState = {
-            status: data.status === 'ok' ? 'completed' : data.status === 'ignored' ? 'ignored' : 'error',
-            result: data,
-          };
-          serverMessage = data.message || "Procesamiento finalizado.";
-          eventSource.close(); // Cerrar SSE
-          setActiveEventSources(prev => {
-            const newSources = {...prev};
-            delete newSources[fileId];
-            return newSources;
-          });
-        } else if (data.type === 'stream_end') {
-          serverMessage = data.message || "Stream finalizado.";
-          eventSource.close(); // Asegurarse de cerrar
-           setActiveEventSources(prev => {
-            const newSources = {...prev};
-            delete newSources[fileId];
-            return newSources;
-          });
-        } else if (data.type === 'error') { // Error desde el stream mismo
-            serverMessage = `Error en stream: ${data.message}`;
-            currentProgressState = { status: 'error', result: data };
-            eventSource.close();
-            setActiveEventSources(prev => {
-                const newSources = {...prev};
-                delete newSources[fileId];
-                return newSources;
-            });
-        }
-
-
-        setFileProgress(prev => ({
-          ...prev,
-          [fileId]: { ...prev[fileId], ...currentProgressState, serverMessage }
-        }));
-        
-        // Si el evento es terminal, verificar si todos los archivos han terminado
-        if (data.type === 'db_record_created' || data.type === 'no_detection_final' || data.type === 'db_error' || data.type === 'stream_end' || data.type === 'completion_error' || data.type === 'error') {
-            checkAllFilesProcessed();
-        }
-
-      } catch (error) {
-        console.error("Error parseando SSE data o actualizando estado:", error);
-        setFileProgress(prev => ({
-          ...prev,
-          [fileId]: { ...prev[fileId], status: 'error', serverMessage: 'Error procesando respuesta del servidor.' }
-        }));
-        eventSource.close();
-        setActiveEventSources(prev => {
-            const newSources = {...prev};
-            delete newSources[fileId];
-            return newSources;
-        });
-        checkAllFilesProcessed();
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error("EventSource failed for fileId:", fileId, err);
-      setFileProgress(prev => ({
-        ...prev,
-        [fileId]: { ...prev[fileId], status: 'error', serverMessage: `Error de conexión con el stream de ${filename}.` }
-      }));
-      eventSource.close();
-      setActiveEventSources(prev => {
-        const newSources = {...prev};
-        delete newSources[fileId];
-        return newSources;
-      });
-      checkAllFilesProcessed();
-    };
-  };
-
-  const checkAllFilesProcessed = () => {
-    // Verifica si todos los archivos en fileProgress tienen un estado terminal
-    // y no hay EventSources activos.
-    const allDone = Object.values(fileProgress).every(fp => 
-        fp.status === 'completed' || fp.status === 'error' || fp.status === 'ignored'
-    ) && Object.keys(activeEventSources).length === 0;
-
-    if (allDone) {
-        setLoading(false);
-        // Consolidar feedback de allFilesResults (now read from state)
-        // Esta lógica necesita ser robusta para manejar resultados de imágenes y videos (que vienen de SSE)
-        const finalResultsForFeedback = allFilesResults.map(res => { // allFilesResults is now from state
-            // Normalizar la estructura si es necesario, ya que algunos vienen de /finalize-upload directamente
-            // y otros del stream. El `fileId` ayuda a mapearlos al `fileProgress` si es necesario.
-            return {
-                filename: fileProgress[res.fileId]?.name || res.filename || 'Archivo desconocido', // Tomar el nombre de fileProgress
-                status: res.status, // 'ok', 'ignored', 'error'
-                numero_detectado: res.numero_detectado,
-                confianza: res.confianza,
-                message: res.message,
-                error: res.error // Si existe
-            };
-        });
-
-
-        const okCount = finalResultsForFeedback.filter(r => r.status === "ok" && r.numero_detectado).length;
-        const errorCount = finalResultsForFeedback.filter(r => r.status === "error" || r.error).length;
-        const ignoredCount = finalResultsForFeedback.filter(r => r.status === "ignored").length;
-        const totalProcessedFiles = finalResultsForFeedback.length; // Debería ser igual a files.length
-
-        let msg = "";
-        if (files.length === 1 && totalProcessedFiles === 1) {
-            const result = finalResultsForFeedback[0];
-            if (result.status === "ok" && result.numero_detectado) {
-                msg = `✅ ${result.filename}: Procesado. Número: ${result.numero_detectado}`;
-                if (result.confianza) msg += ` (Confianza: ${(result.confianza * 100).toFixed(1)}%)`;
-            } else if (result.status === "ignored") {
-                msg = `⚠️ ${result.filename}: ${result.message || 'Procesado, pero no se detectó número.'}`;
-            } else if (result.status === "error") {
-                msg = `❌ ${result.filename}: Error - ${result.message || result.error || 'Error desconocido'}`;
-            } else { // Otros estados que puedan venir del stream
-                 msg = `ℹ️ ${result.filename}: ${result.message || 'Estado desconocido.'}`;
-            }
-        } else {
-            msg = `Procesados: ${totalProcessedFiles}/${files.length}. ✅ Detectados: ${okCount}`;
-            if (ignoredCount > 0) msg += `, ⚠️ Sin detección: ${ignoredCount}`;
-            if (errorCount > 0) msg += `, ❌ Con errores: ${errorCount}`;
-        }
-        
-        const errorDetails = finalResultsForFeedback
-            .filter(r => r.status === "error" || r.error)
-            .map(r => `${r.filename}: ${r.error || r.message || 'Error desconocido'}`)
-            .join('\n');
-
-        setFeedback({
-            status: errorCount > 0 ? "error" : ignoredCount > 0 && okCount === 0 && totalProcessedFiles > 0 ? "warning" : (okCount > 0 || totalProcessedFiles === 0) ? "success" : "info",
-            message: msg,
-            details: errorDetails ? `Detalles de errores:\n${errorDetails}` : null
-        });
-        
-        setFiles([]); 
-        setOverallProgress(0); 
-        setAbortController(null);
-        // No limpiar fileProgress aquí para que la UI pueda mostrar los estados finales de cada archivo.
-        // Se limpiará en handleChange.
-    }
-  };
-
 
   const handleCancelUpload = () => {
     if (abortController) {
-      abortController.abort(); // Esto cancelará las subidas de chunks y las llamadas a /finalize-upload
-    }
-    // Cerrar todos los EventSource activos
-    Object.values(activeEventSources).forEach(source => source.close());
-    setActiveEventSources({});
-    
-    setFeedback({ status: "error", message: "Carga cancelada por el usuario." });
-    setLoading(false);
-    // Actualizar el estado de los archivos en progreso a 'error' o 'cancelled'
-    const updatedFileProgress = { ...fileProgress };
-    Object.keys(updatedFileProgress).forEach(fileId => {
-        if (updatedFileProgress[fileId].status === 'uploading' || updatedFileProgress[fileId].status === 'finalizing' || updatedFileProgress[fileId].status === 'server_processing') {
-            updatedFileProgress[fileId].status = 'error'; // o 'cancelled'
-            updatedFileProgress[fileId].serverMessage = 'Cancelado por usuario.';
+      abortController.abort();
+      setLoading(false);
+      // Update feedback for any files that were in 'uploading' or 'pending' state
+      const updatedFileProgress = { ...fileProgress };
+      Object.keys(updatedFileProgress).forEach(fileId => {
+        if (updatedFileProgress[fileId].status === 'uploading' || updatedFileProgress[fileId].status === 'pending' || updatedFileProgress[fileId].status === 'finalizing' || updatedFileProgress[fileId].status === 'server_processing') {
+          updatedFileProgress[fileId].status = 'error'; // or 'cancelled'
+          updatedFileProgress[fileId].serverMessage = 'Carga/Procesamiento cancelado por el usuario.';
         }
-    });
-    setFileProgress(updatedFileProgress);
+      });
+      setFileProgress(updatedFileProgress);
+      setFeedback({ status: "info", message: "Carga y procesamiento cancelados por el usuario." });
+      Object.values(activeEventSources).forEach(source => source.close());
+      setActiveEventSources({});
+      console.log("Upload and processing cancelled by user.");
+      checkAllFilesProcessed(); // Re-check to update overall status
+    }
   };
 
   return (
@@ -445,8 +531,8 @@ const Upload = () => {
         {modelInfo && (
           <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
             <div className="text-sm text-purple-700 font-semibold">
-              🧠 Modelo Activo: {modelInfo.model_type} | 
-              🎯 {modelInfo.classes_count} clases detectables | 
+              🧠 Modelo Activo: {modelInfo.model_type} |
+              🎯 {modelInfo.classes_count} clases detectables |
               📊 Confianza: {modelInfo.confidence_threshold}
             </div>
           </div>
@@ -454,7 +540,6 @@ const Upload = () => {
       </div>
 
       <form onSubmit={handleUpload} className="space-y-6">
-        {/* Área de selección de archivos */}
         <div className="border-2 border-dashed border-cyan-300 rounded-xl p-8 text-center bg-cyan-50 hover:bg-cyan-100 transition">
           <div className="mb-4">
             <svg className="mx-auto h-12 w-12 text-cyan-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
@@ -480,205 +565,159 @@ const Upload = () => {
           </label>
         </div>
 
-
-        {/* Archivos seleccionados y progreso individual */}
-        {files.length > 0 && Object.keys(fileProgress).length > 0 && ( // Asegurar que fileProgress esté poblado
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-700 mb-3">
-              📁 Archivos ({files.length})
-            </h3>
-            <div className="space-y-3">
-              {Object.keys(fileProgress).map((fileId) => { // Iterar sobre fileProgress
-                const currentFile = fileProgress[fileId];
-                if (!currentFile || !currentFile.name) return null; // Si no hay datos, no renderizar
-
-                const originalFile = files.find(f => f.name === currentFile.name); // Encontrar el tipo del archivo original
-                const isVideo = originalFile?.type.startsWith('video/');
-                const isImage = originalFile?.type.startsWith('image/');
-                const fileSize = (currentFile.total / (1024 * 1024)).toFixed(2);
-                const progressPercent = currentFile.total > 0 ? Math.round((currentFile.loaded / currentFile.total) * 100) : 0;
-
-                let statusMessage = '';
-                let progressBarClass = 'bg-blue-500';
-
-                switch (currentFile.status) {
-                  case 'uploading':
-                    statusMessage = `Subiendo: ${progressPercent}%`;
-                    break;
-                  case 'finalizing':
-                    statusMessage = 'Ensamblando en servidor...';
-                    progressBarClass = 'bg-yellow-500 animate-pulse';
-                    break;
-                  case 'server_processing':
-                    statusMessage = currentFile.serverMessage || 'Procesando en servidor...';
-                    progressBarClass = 'bg-purple-500 animate-pulse'; // Nuevo color para SSE
-                    break;
-                  case 'completed':
-                    statusMessage = `✅ ${currentFile.serverMessage || 'Completado'}`;
-                    progressBarClass = 'bg-green-500';
-                    break;
-                  case 'error':
-                    statusMessage = `❌ ${currentFile.serverMessage || 'Error'}`;
-                    progressBarClass = 'bg-red-500';
-                    break;
-                  case 'ignored':
-                    statusMessage = `⚠️ ${currentFile.serverMessage || 'Ignorado/Sin detección'}`;
-                    progressBarClass = 'bg-yellow-500';
-                    break;
-                  default:
-                    statusMessage = currentFile.serverMessage || 'Pendiente...';
-                }
-
-                return (
-                  <div key={fileId} className="flex items-center gap-3 bg-white p-3 rounded-lg border">
-                    <div className="text-2xl">
-                      {isVideo ? '🎬' : isImage ? '🖼️' : '📄'}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-800">{currentFile.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {isVideo ? '📹 Video' : isImage ? '🖼️ Imagen' : '📄 Archivo'} • {fileSize} MB
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1 italic">{statusMessage}</div>
-                      { (currentFile.status === 'uploading' || currentFile.status === 'finalizing' || currentFile.status === 'server_processing') && currentFile.total > 0 && (
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                          <div
-                            className={`${progressBarClass} h-2 rounded-full transition-all duration-150 ease-out`}
-                            style={{ width: `${currentFile.status === 'completed' || currentFile.status === 'error' || currentFile.status === 'ignored' ? 100 : progressPercent}%` }} // Barra llena en estados finales
-                          ></div>
-                        </div>
-                      )}
-                       {/* Mostrar resultado de detección si está disponible y completado */}
-                       {currentFile.status === 'completed' && currentFile.result && currentFile.result.numero_detectado && (
-                        <div className="text-xs text-green-700 mt-1">
-                            Detectado: <strong>{currentFile.result.numero_detectado}</strong>
-                            {currentFile.result.confianza && ` (Conf: ${(currentFile.result.confianza * 100).toFixed(1)}%)`}
-                        </div>
-                       )}
-                    </div>
-                    {/* Botón para remover archivo (adaptar lógica si es necesario) */}
-                    {!loading && !['uploading', 'finalizing', 'server_processing'].includes(currentFile.status) && (
-                       <button
-                        onClick={() => {
-                            // Lógica para remover de `files` y `fileProgress`
-                            setFiles(prevFiles => prevFiles.filter(f => f.name !== currentFile.name));
-                            setFileProgress(prevFp => {
-                                const newFp = {...prevFp};
-                                delete newFp[fileId];
-                                return newFp;
-                            });
-                        }}
-                        className="text-red-500 hover:text-red-700 text-xl"
-                        title="Eliminar archivo de la lista"
-                       >
-                        🗑️
-                       </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Configuración básica */}
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Evento</label>
-            <select
-              value={evento}
-              onChange={(e) => setEvento(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
-              disabled={loading}
-            >
-              <option value="ingreso">🟢 Ingreso</option>
-              <option value="egreso">🔴 Egreso</option>
+            <label htmlFor="evento" className="block text-sm font-medium text-gray-700">Evento</label>
+            <select id="evento" value={evento} onChange={(e) => setEvento(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500">
+              <option value="ingreso">Ingreso</option>
+              <option value="salida">Salida</option>
+              <option value="otro">Otro</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Túnel (opcional)</label>
-            <input
-              type="text"
-              placeholder="ej: Túnel A"
-              value={tunel}
-              onChange={(e) => setTunel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-              disabled={loading}
-            />
+            <label htmlFor="tunel" className="block text-sm font-medium text-gray-700">Túnel (Opcional)</label>
+            <input type="text" id="tunel" value={tunel} onChange={(e) => setTunel(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: Principal, Secundario" />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">% Merma (opcional)</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              placeholder="0.00"
-              value={merma}
-              onChange={(e) => setMerma(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400"
-              disabled={loading}
-            />
+            <label htmlFor="merma" className="block text-sm font-medium text-gray-700">Merma (Opcional)</label>
+            <input type="text" id="merma" value={merma} onChange={(e) => setMerma(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: 10%" />
           </div>
         </div>
 
-        {/* Botón de subida y cancelación */}
-        <div className="text-center space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
           <button
             type="submit"
-            disabled={!files.length || loading}
-            className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed text-lg shadow-lg"
+            disabled={loading || files.length === 0}
+            className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-150 ease-in-out flex"
           >
-            {
-              loading ? (
-                <div className="flex items-center gap-2">
-                  <Spinner size={20} />
-                  Procesando... ({`${overallProgress}%`})
-                </div>
-              ) : (
-                `Procesar ${files.length > 0 ? `${files.length} archivo${files.length > 1 ? 's' : ''}` : 'archivos'}`
-              )
-            }
+            {loading ? <><Spinner size="sm" /> <span className="ml-2">Procesando...</span></> : "📤 Iniciar Procesamiento"}
           </button>
           {loading && (
             <button
               type="button"
               onClick={handleCancelUpload}
-              className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition text-md shadow"
+              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-gray-300 text-base font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 transition-colors duration-150 ease-in-out flex"
             >
-              Cancelar Carga
+              🛑 Cancelar
             </button>
           )}
         </div>
       </form>
 
-      {/* Progreso General (replaces old progress section) */}
-      {loading && overallProgress > 0 && overallProgress < 100 && (
-        <div className="mt-6 bg-blue-50 p-4 rounded-lg">
-          <div className="flex items-center justify-between text-blue-700 mb-1">
-            <span>Progreso General de Subida</span>
-            <span className="font-semibold">{`${overallProgress}%`}</span>
+      {feedback && (
+        <div className="mt-6">
+          <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
+        </div>
+      )}
+
+      {loading && overallProgress > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-700 mb-2">Progreso Total de Subida</h3>
+          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+            <div className="bg-cyan-600 h-2.5 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallProgress}%` }}></div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div 
-                className="bg-blue-600 h-2.5 rounded-full transition-all duration-150 ease-out" 
-                style={{ width: `${overallProgress}%` }}>
-            </div>
+          <p className="text-sm text-gray-600 text-center mt-1">{overallProgress}%</p>
+        </div>
+      )}
+
+      {Object.keys(fileProgress).length > 0 && (
+        <div className="mt-6 bg-gray-50 rounded-lg p-4 shadow">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
+            Detalle del Procesamiento:
+          </h3>
+          <div className="space-y-4">
+            {Object.entries(fileProgress).map(([fileId, progress]) => {
+              const originalFile = files.find(f => f.name === progress.name);
+              // const isVideo = originalFile?.type.startsWith('video/'); // Not currently used, but kept for potential future use
+              const fileSizeMB = progress.total ? (progress.total / (1024 * 1024)).toFixed(2) : 'N/A';
+              const individualProgressPercent = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
+
+              let statusIcon = '⏳';
+              let statusColor = 'text-gray-600';
+              let statusText = progress.status; // Default to the raw status
+
+              if (progress.status === 'completed') {
+                statusIcon = '✅';
+                statusColor = 'text-green-600';
+                statusText = 'Completado';
+              } else if (progress.status === 'error') {
+                statusIcon = '❌';
+                statusColor = 'text-red-600';
+                statusText = 'Error';
+              } else if (progress.status === 'ignored') {
+                statusIcon = '⚠️';
+                statusColor = 'text-yellow-600';
+                statusText = 'Ignorado';
+              } else if (progress.status === 'uploading') {
+                statusIcon = '📤';
+                statusColor = 'text-blue-600';
+                statusText = 'Subiendo';
+              } else if (progress.status === 'finalizing') {
+                statusIcon = '⚙️';
+                statusColor = 'text-blue-600';
+                statusText = 'Finalizando';
+              } else if (progress.status === 'server_processing') {
+                statusIcon = '🧠';
+                statusColor = 'text-purple-600';
+                statusText = 'Procesando';
+              } else if (progress.status === 'pending') {
+                statusIcon = '⏳';
+                statusColor = 'text-gray-500';
+                statusText = 'Pendiente';
+              }
+
+              return (
+                <div key={fileId} className="p-4 bg-white rounded-lg shadow border border-gray-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-semibold text-gray-700 truncate max-w-[calc(100%-120px)]" title={progress.name}>
+                      {progress.name} ({fileSizeMB} MB)
+                    </span>
+                    <span className={`font-bold ${statusColor} flex items-center text-sm whitespace-nowrap`}>
+                      {statusIcon} <span className="ml-1.5">{statusText}</span>
+                    </span>
+                  </div>
+
+                  {(progress.status === 'uploading' || (progress.status === 'pending' && loading && files.map(f => f.name).includes(progress.name))) && progress.total > 0 && (
+                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-150"
+                        style={{ width: `${individualProgressPercent}%` }}
+                      ></div>
+                    </div>
+                  )}
+                  {progress.status === 'uploading' && progress.total > 0 && (
+                    <p className="text-xs text-gray-500 text-right">{individualProgressPercent}% subido</p>
+                  )}
+
+                  {progress.serverMessage && (
+                    <p className="text-xs text-gray-500 mt-1 bg-gray-100 p-2 rounded">
+                      {progress.serverMessage}
+                    </p>
+                  )}
+
+                  {progress.status === 'completed' && progress.result && (
+                    <div className="mt-2 text-xs p-2 bg-green-50 rounded border border-green-200">
+                      <p><strong>Número:</strong> {progress.result.numero || progress.result.numero_detectado || 'N/A'}</p>
+                      <p><strong>Confianza:</strong> {progress.result.confianza ? (progress.result.confianza * 100).toFixed(1) + '%' : 'N/A'}</p>
+                      {progress.result.message && !progress.serverMessage.includes(progress.result.message) && <p><strong>Msg:</strong> {progress.result.message}</p>}
+                    </div>
+                  )}
+                  {progress.status === 'error' && progress.result && progress.result.message && (
+                    <div className="mt-2 text-xs p-2 bg-red-50 rounded border border-red-200 text-red-700">
+                      <p><strong>Error:</strong> {progress.result.message}</p>
+                    </div>
+                  )}
+                  {progress.status === 'ignored' && progress.result && progress.result.message && (
+                    <div className="mt-2 text-xs p-2 bg-yellow-50 rounded border border-yellow-200 text-yellow-700">
+                      <p><strong>Info:</strong> {progress.result.message}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
-      
-      {/* Feedback */}
-      {feedback && (
-        <Feedback 
-            status={feedback.status} 
-            message={feedback.message} 
-            details={feedback.details ? (typeof feedback.details === 'string' ? feedback.details : JSON.stringify(feedback.details, null, 2)) : null}
-        />
-      )}
-
-      {/* Vista previa de archivos seleccionados (removed as it's integrated above) */}
-      
     </div>
   );
 };

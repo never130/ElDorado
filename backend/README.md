@@ -65,8 +65,9 @@ pip install -r requirements.txt
 - **Configuración de Cámaras**: Editar `cameras_config.json` para definir las fuentes de video/cámaras para el sistema de captura automática.
 
 ### 4. Ejecutar el Servidor
+Anteriormente, se utilizaba `uvicorn main:app --reload`. Ahora, el servidor se inicia directamente con Python:
 ```powershell
-uvicorn main:app --reload
+python main.py
 ```
 El backend estará disponible en `http://localhost:8000`.
 
