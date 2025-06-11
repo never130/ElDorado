@@ -128,9 +128,11 @@ const Upload = () => {
         const chunk = file.slice(start, end);
         
         const chunkFormData = new FormData();
-        chunkFormData.append("fileChunk", chunk);
-        chunkFormData.append("fileId", fileId); // Usar el fileId generado consistentemente
-        chunkFormData.append("chunkNumber", chunkNumber);
+        // chunkFormData.append("fileChunk", chunk); // OLD
+        chunkFormData.append("chunk", chunk); // NEW - Match backend expected field name
+        chunkFormData.append("fileId", fileId);
+        // chunkFormData.append("chunkNumber", chunkNumber); // OLD
+        chunkFormData.append("chunkIndex", chunkNumber); // NEW - Match backend expected field name
         chunkFormData.append("totalChunks", totalChunks);
         chunkFormData.append("originalFilename", file.name);
 

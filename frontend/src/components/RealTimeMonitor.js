@@ -22,14 +22,18 @@ const RealTimeMonitor = () => {
       }
       // Obtener estado del sistema automático inicial
       const statusRes = await axios.get('http://localhost:8000/auto-capture/status');
-      setAutoStatus(statusRes.data.status);
-      setSystemStats(statusRes.data.statistics || {});
+      setAutoStatus(statusRes.data.status); // This should be statusRes.data.manager_running or similar based on backend
+      setSystemStats(statusRes.data.statistics || {}); // This should be statusRes.data.cameras (array of stats)
 
       // Obtener un historial inicial de detecciones
-      const recentRes = await axios.get('http://localhost:8000/vagonetas/', {
-        params: { limit: 10, order: 'desc' }
+      // MODIFIED: Changed API endpoint from /vagonetas/ to /historial/
+      // Also, the backend /historial/ endpoint uses skip/limit, not order.
+      // Assuming we want the 10 most recent for the monitor.
+      const recentRes = await axios.get('http://localhost:8000/historial/', {
+        params: { limit: 10, skip: 0 } // Fetch 10 most recent
       });
-      setRecentDetections(recentRes.data.slice(0, 10));
+      // The backend /historial/ already sorts by timestamp descending.
+      setRecentDetections(recentRes.data); // Data should already be the array
 
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -58,8 +62,9 @@ const RealTimeMonitor = () => {
         // to ensure UI consistency if status changed while disconnected.
         axios.get('http://localhost:8000/auto-capture/status')
           .then(statusRes => {
-            setAutoStatus(statusRes.data.status);
-            setSystemStats(statusRes.data.statistics || {});
+            // MODIFIED: Align with backend status structure
+            setAutoStatus(statusRes.data.manager_running ? 'running' : 'stopped'); 
+            setSystemStats(statusRes.data.cameras || []); // Expecting an array of camera stats
           })
           .catch(err => console.error('Error fetching status on WS connect:', err));
       };
@@ -77,14 +82,16 @@ const RealTimeMonitor = () => {
           // A more optimized approach would be for the backend to send updated stats with the detection.
           axios.get('http://localhost:8000/auto-capture/status')
             .then(statusRes => {
-                setAutoStatus(statusRes.data.status); // Update status as well
-                setSystemStats(statusRes.data.statistics || {});
+                // MODIFIED: Align with backend status structure
+                setAutoStatus(statusRes.data.manager_running ? 'running' : 'stopped');
+                setSystemStats(statusRes.data.cameras || []);
             })
             .catch(err => console.error('Error fetching status on new detection:', err));
 
         } else if (message.type === 'system_status') { // Example: if backend sends status updates
-            setAutoStatus(message.data.status);
-            setSystemStats(message.data.statistics || {});
+            // MODIFIED: Align with backend status structure
+            setAutoStatus(message.data.manager_running ? 'running' : 'stopped');
+            setSystemStats(message.data.cameras || []);
         }
         // Potentially handle other message types, e.g., for auto-capture status changes directly
       };
@@ -182,13 +189,14 @@ const RealTimeMonitor = () => {
   );
 
   // Calcular estadísticas globales
-  const totalDetections = Object.values(systemStats).reduce(
-    (acc, stats) => acc + (stats?.vagonetas_detected || 0), 0
-  );
+  // MODIFIED: systemStats is now an array of camera stats.
+  const totalDetections = Array.isArray(systemStats) ? systemStats.reduce(
+    (acc, cameraStats) => acc + (cameraStats?.stats?.vagonetas_detected || 0), 0
+  ) : 0;
   
-  const totalMotion = Object.values(systemStats).reduce(
-    (acc, stats) => acc + (stats?.motion_detected || 0), 0
-  );
+  const totalMotion = Array.isArray(systemStats) ? systemStats.reduce(
+    (acc, cameraStats) => acc + (cameraStats?.stats?.motion_detected || 0), 0
+  ) : 0;
 
   const efficiency = totalMotion > 0 ? Math.round((totalDetections / totalMotion) * 100) : 0;
 
@@ -240,25 +248,32 @@ const RealTimeMonitor = () => {
           </div>
 
           {/* Estadísticas por cámara */}
-          {autoStatus === 'running' && Object.keys(systemStats).length > 0 && (
+          {/* MODIFIED: Check autoStatus and if systemStats (array) has length */}
+          {autoStatus === 'running' && Array.isArray(systemStats) && systemStats.length > 0 && (
             <div className="mt-6">
               <h3 className="text-lg font-bold text-cyan-800 mb-3">
                 🎥 Por Cámara
               </h3>
-              {Object.entries(systemStats).map(([cameraId, stats]) => (
-                <div key={cameraId} className="bg-white rounded-lg p-3 mb-3 shadow-sm">
-                  <div className="font-semibold text-cyan-700 mb-2">{cameraId}</div>
+              {/* MODIFIED: Iterate over systemStats array */}
+              {systemStats.map((cameraData) => (
+                <div key={cameraData.camera_id} className="bg-white rounded-lg p-3 mb-3 shadow-sm">
+                  <div className="font-semibold text-cyan-700 mb-2">{cameraData.camera_id} ({cameraData.evento})</div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>Frames: {stats.frames_processed}</div>
-                    <div>Movimientos: {stats.motion_detected}</div>
+                    <div>Frames: {cameraData.stats.frames_processed}</div>
+                    <div>Movimientos: {cameraData.stats.motion_detected}</div>
                     <div className="text-green-600 font-semibold">
-                      Vagonetas: {stats.vagonetas_detected}
+                      Vagonetas: {cameraData.stats.vagonetas_detected}
                     </div>
                     <div className="text-orange-600">
-                      Falsos +: {stats.false_positives}
+                      Falsos +: {cameraData.stats.false_positives}
                     </div>
+                    {/* MODIFIED: Display video progress if available */}
+                    {cameraData.source_type === 'video' && cameraData.video_progress && (
+                      <div className="col-span-2 text-xs text-gray-500">Progreso Video: {cameraData.video_progress}</div>
+                    )}
                   </div>
-                </div>              ))}
+                </div>
+              ))}
             </div>
           )}
 

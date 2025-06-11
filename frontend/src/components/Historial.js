@@ -101,18 +101,13 @@ const Historial = () => {
                       </span>
                     ) : <>{"-"}</>}
                   </td>
-                  <td className="px-4 py-2 border-b">{r.merma || "-"}</td>
+                  <td className="px-4 py-2 border-b">{r.merma !== null && r.merma !== undefined ? `${r.merma}%` : "-"}</td>
                   <td className="px-4 py-2 border-b">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 rounded-full overflow-hidden mr-2">
-                        <img src={r.imagen_confianza} alt="Confianza" className="w-full h-full object-cover" />
-                      </div>
-                      <span className="text-sm font-semibold">{r.confianza || "-"}</span>
-                    </div>
+                    {r.confianza !== null && r.confianza !== undefined ? r.confianza.toFixed(4) : "-"}
                   </td>
-                  <td className="px-4 py-2 border-b">{r.origen || "-"}</td>
+                  <td className="px-4 py-2 border-b">{r.origen_deteccion || "-"}</td>
                   <td className="px-4 py-2 border-b">
-                    {new Date(r.timestamp).toLocaleString("es-CL", {
+                    {r.timestamp instanceof Date ? r.timestamp.toLocaleString("es-CL", {
                       year: "numeric",
                       month: "2-digit",
                       day: "2-digit",
@@ -120,15 +115,15 @@ const Historial = () => {
                       minute: "2-digit",
                       second: "2-digit",
                       hour12: false
-                    })}
+                    }) : String(r.timestamp)}
                   </td>
                   <td className="px-4 py-2 border-b">
-                    {r.imagen ? (
-                      <a href={r.imagen} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
-                        Ver Imagen
+                    {r.imagen_path ? (
+                      <a href={`${API_BASE_URL}/${r.imagen_path}`} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
+                        Ver Video
                       </a>
                     ) : (
-                      <span className="text-gray-500">Sin imagen</span>
+                      <span className="text-gray-500">Sin video</span>
                     )}
                   </td>
                 </tr>
