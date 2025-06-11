@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'; // MODI
 import axios from 'axios';
 // import Spinner from './Spinner'; // Comentado si no se usa
 // import { Link } from 'react-router-dom'; // Comentado si no se usa
-import { API_BASE_URL, API_ENDPOINTS } from '../config/api'; // Corregida la importación
+// import { API_BASE_URL, API_ENDPOINTS } from '../config/api'; // Corregida la importación // MODIFIED: Commented out as it's unused
 
 const RealTimeMonitor = () => {
   const [recentDetections, setRecentDetections] = useState([]);

@@ -1,0 +1,18 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+# Si usas un archivo .env para configuraciones del backend, descomenta la siguiente línea:
+# .env
+
+# Carpetas de uploads temporales (si no deben estar en el repositorio)
+# Si la carpeta 'uploads/' o 'extracted_frames/' contiene solo archivos temporales
+# que no necesitas versionar, puedes descomentar las líneas correspondientes.
+# uploads/
+# extracted_frames/
+
+# Archivos de configuración de IDEs (opcional, a veces mejor en el .gitignore raíz)
+# .vscode/
