@@ -880,6 +880,81 @@ async def get_model_config():
             }
         }
         
+        return {"status": "success", "config": config}
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Error obteniendo configuración: {str(e)}"}
+
+@app.put("/model/config")
+async def update_model_config(new_config: dict):
+    """Actualiza la configuración del modelo"""
+    try:
+        from utils.image_processing import processor
+        
+        if "confidence_threshold" in new_config:
+            new_threshold = float(new_config["confidence_threshold"])
+            if 0.1 <= new_threshold <= 1.0:
+                processor.min_confidence = new_threshold
+            else:
+                raise ValueError("confidence_threshold debe estar entre 0.1 y 1.0")
+        
+        return {"status": "success", "message": "Configuración actualizada", "new_config": new_config}
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Error actualizando configuración: {str(e)}"}
+
+@app.post("/test/detection")
+async def test_detection_with_sample():
+    """Prueba la detección con imagen de muestra"""
+    try:
+        # Podrías implementar una prueba con una imagen de ejemplo
+        sample_image_path = r"c:\\Users\\NEVER\\OneDrive\\Documentos\\VSCode\\MisProyectos\\app_imagenes\\backend\\models\\numeros_enteros\\yolo_model\\dataset"
+        
+        # Buscar archivos de imagen en el directorio
+        import glob
+        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
+        sample_files = []
+        
+        for ext in image_extensions:
+            sample_files.extend(glob.glob(os.path.join(sample_image_path, ext)))
+            sample_files.extend(glob.glob(os.path.join(sample_image_path, "**", ext), recursive=True))
+        
+        if not sample_files:
+            return {"status": "error", "message": "No se encontraron imágenes de muestra"}
+        
+        # Usar la primera imagen encontrada
+        test_image = sample_files[0]
+        
+        from utils.image_processing import detectar_vagoneta_y_placa_mejorado
+        
+        # Probar detección mejorada
+        # Actualizado para desempaquetar 5 valores
+        cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(test_image)
+        
+        result = {
+            "status": "success",
+            "test_image": os.path.basename(test_image),
+            "numero_detectado": numero_detectado,
+            "confianza_placa": confianza_placa, # Añadido
+            "bbox_placa": bbox_placa.tolist() if bbox_placa is not None else None,
+            "bbox_vagoneta": bbox_vagoneta.tolist() if bbox_vagoneta is not None else None,
+            "deteccion_exitosa": numero_detectado is not None
+        }
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en prueba de detección: {str(e)}")
+
+@app.post("/debug/test-detection")
+async def debug_test_detection(file: UploadFile = File(...)):
+    """Endpoint de debug para probar detección en imagen específica"""
+    try:
+        # Guardar imagen temporal
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        temp_path = UPLOAD_DIR / f"debug_{timestamp}_{file.filename}"
+        
+        with temp_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         print(f"🔍 DEBUG: Procesando imagen {temp_path}")
