@@ -1,128 +1,127 @@
-# 🔧 Backend - Sistema de Detección de Números Calados
+# 🔧 Backend - Sistema de Detección de Números de Vagonetas
 
-Este backend implementa un sistema avanzado de visión computacional para la detección automática de números calados en vagonetas utilizando modelos YOLO especializados, con procesamiento en tiempo real y registro completo en MongoDB.
+Este backend implementa un sistema avanzado de visión computacional para la detección automática de números en vagonetas utilizando modelos YOLO, con procesamiento de imágenes/videos subidos, captura automática desde cámaras, y registro completo en MongoDB. Proporciona actualizaciones en tiempo real al frontend mediante WebSockets.
 
-## 🎯 ¿Para qué sirve?
-- **Detección Automática**: Identifica números calados en vagonetas mediante modelos YOLO entrenados específicamente
-- **Procesamiento en Tiempo Real**: Captura desde cámaras y procesa videos/imágenes instantáneamente
-- **Sistema de Captura Inteligente**: Implementa cooldown automático para evitar duplicados
-- **Registro Completo**: Almacena metadatos, imágenes procesadas y trayectorias en MongoDB
+## 🎯 Funcionalidades Principales
+- **Detección Automática con IA**: Identifica números de vagonetas usando un modelo YOLOv8 entrenado.
+- **Procesamiento de Archivos**: Permite la subida de imágenes y videos para su análisis.
+- **Sistema de Captura Automática**: Configurable mediante `cameras_config.json` para monitorear cámaras o fuentes de video, detectar movimiento y procesar vagonetas automáticamente.
+- **Registro en MongoDB**: Almacena todas las detecciones con metadatos relevantes (timestamp, número, túnel, evento, imagen, etc.).
+- **WebSockets para Tiempo Real**: Envía notificaciones de nuevas detecciones al frontend conectado.
+- **API RESTful**: Endpoints para la gestión de datos, configuración y estado del sistema.
 
-## 🛠️ Tecnologías Usadas y Para Qué Sirve Cada Una
-- **FastAPI:** Framework moderno para crear APIs REST de alto rendimiento con documentación automática
-- **Uvicorn:** Servidor ASGI para ejecutar aplicaciones FastAPI con soporte para async/await
-- **MongoDB:** Base de datos NoSQL para almacenar registros de detecciones, metadatos e imágenes
-- **PyMongo:** Driver oficial de Python para operaciones con MongoDB
-- **OpenCV (cv2):** Biblioteca de visión computacional para procesamiento de imágenes y videos
-- **Ultralytics YOLOv8:** Modelos de detección especializados para números calados y enteros
-- **Tesseract OCR:** Motor de reconocimiento óptico de caracteres como fallback
-- **python-dotenv:** Gestión de variables de entorno para configuración flexible
-- **aiofiles:** Manejo asíncrono de archivos para mejor rendimiento
-- **python-multipart:** Soporte para formularios multipart y carga de archivos
+## 🛠️ Tecnologías Usadas
+- **FastAPI**: Framework para crear APIs REST y WebSockets.
+- **Uvicorn**: Servidor ASGI para ejecutar la aplicación FastAPI.
+- **MongoDB & PyMongo**: Base de datos NoSQL y driver Python para almacenamiento.
+- **OpenCV (cv2)**: Procesamiento de imágenes y videos.
+- **Ultralytics YOLOv8**: Modelo de detección de objetos.
+- **python-dotenv**: Gestión de variables de entorno.
+- **aiofiles**: Manejo asíncrono de archivos.
+- **python-multipart**: Soporte para carga de archivos.
 
-## 🔄 Flujo de Procesamiento Especializado
-1. **Captura**: El sistema recibe imágenes/videos desde frontend o cámaras físicas
-2. **Detección YOLO**: Aplica modelos especializados para detectar números calados
-3. **Procesamiento Inteligente**: 
-   - Recorta regiones de interés usando detecciones YOLO
-   - Aplica filtros y mejoras de calidad
-   - Implementa sistema de cooldown para evitar duplicados
-4. **Extracción de Datos**: Utiliza OCR como fallback si YOLO no detecta texto
-5. **Registro Completo**: Almacena en MongoDB con timestamps, confianza y metadatos
-6. **Respuesta**: Retorna resultados estructurados al frontend
+## 🔄 Flujo de Procesamiento
+1.  **Entrada de Datos**:
+    *   **Carga Manual**: El usuario sube imágenes/videos a través del endpoint `/upload-multiple/`.
+    *   **Captura Automática**: El `AutoCaptureSystem` monitorea las fuentes definidas en `cameras_config.json`. Al detectar movimiento y una vagoneta, procesa el frame.
+2.  **Detección YOLO**: Se aplica el modelo YOLOv8 para detectar la vagoneta y su número.
+3.  **Extracción de Datos**: Se extrae el número detectado.
+4.  **Registro en MongoDB**: La información de la detección (número, timestamp, ruta de imagen, etc.) se guarda en la colección `vagonetas`.
+5.  **Notificación WebSocket**: Si la detección proviene de la captura automática, se envía un mensaje a través del endpoint `/ws/detections` a los clientes frontend conectados.
+6.  **Respuesta API**: Para cargas manuales, se devuelve una respuesta JSON con el resultado del procesamiento.
 
-## Instalación manual
+## Instalación
 
-### 1. Requisitos previos
-- Python 3.9+ instalado y en PATH
-- MongoDB Community Server instalado y corriendo
-- Tesseract OCR instalado en C:\Program Files\Tesseract-OCR
+### 1. Requisitos Previos
+- Python 3.9+
+- MongoDB Community Server instalado y corriendo.
+- (Opcional) Tesseract OCR si se planea usar como fallback (actualmente la dependencia podría estar o no en el código).
 
-### 2. Crear y activar entorno virtual
+### 2. Entorno Virtual y Dependencias
 ```powershell
+# Navegar al directorio backend
+cd backend
+
 # Crear entorno virtual
 python -m venv venv
 
 # Activar entorno virtual
 .\venv\Scripts\Activate
-```
 
-### 3. Instalar dependencias
-```powershell
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### 4. Configurar MongoDB
-```powershell
-# Inicializar base de datos y crear índices
-python init_db.py
-```
+### 3. Configuración
+- **Variables de Entorno**: Crear un archivo `.env` en el directorio `backend/` para la configuración de MongoDB si no se usan los valores por defecto:
+  ```ini
+  MONGO_HOST=localhost
+  MONGO_PORT=27017
+  MONGO_DB_NAME=el_dorado
+  # MONGO_USER=tu_usuario (si aplica)
+  # MONGO_PASS=tu_contraseña (si aplica)
+  # MONGO_AUTH_DB=admin (si aplica)
+  ```
+- **Configuración de Cámaras**: Editar `cameras_config.json` para definir las fuentes de video/cámaras para el sistema de captura automática.
 
-### 5. Configurar variables de entorno (opcional)
-Crea un archivo `.env` si necesitas personalizar la configuración:
-```ini
-# MongoDB Configuration
-MONGO_URI=mongodb://localhost:27017
-MONGO_DB=vagonetas_db
-
-# OCR Configuration
-TESSERACT_PATH=C:\\Program Files\\Tesseract-OCR\\tesseract.exe
-
-# Image Processing
-MIN_CONFIDENCE=0.5
-DETECTION_COOLDOWN=5
-```
-
-### 6. Ejecutar el servidor
+### 4. Ejecutar el Servidor
 ```powershell
 uvicorn main:app --reload
 ```
+El backend estará disponible en `http://localhost:8000`.
 
-## 📋 Endpoints principales
-- `POST /upload/` — Procesa imagen individual con detección de números calados
-- `POST /upload-multiple/` — Procesamiento por lotes de múltiples imágenes
-- `POST /upload-video/` — Análisis completo de videos con detección frame por frame
-- `POST /cameras/start` — Inicia captura automática desde cámaras físicas
-- `POST /cameras/stop/{camera_id}` — Detiene captura específica de cámara
-- `GET /cameras/status` — Estado en tiempo real de todas las cámaras activas
-- `GET /vagonetas/` — Consulta historial con filtros por número, fecha y confianza
-- `GET /trayectoria/{numero}` — Seguimiento temporal de vagoneta específica
-- `GET /stats/` — Estadísticas de detecciones y rendimiento del sistema
+## 📋 Endpoints Principales (API REST)
+- `POST /upload-multiple/`: Sube y procesa múltiples archivos (imágenes/videos).
+- `GET /vagonetas/`: Consulta el historial de detecciones con filtros.
+- `GET /trayectoria/{numero}`: Obtiene todos los eventos de una vagoneta específica.
+- `DELETE /vagonetas/{record_id}`: Anula (soft delete) un registro.
+- `PUT /vagonetas/{record_id}`: Actualiza un registro.
+- `GET /search`: Búsqueda de texto en registros.
+- `POST /auto-capture/start`: Inicia el sistema de captura automática.
+- `POST /auto-capture/stop`: Detiene el sistema de captura automática.
+- `GET /auto-capture/status`: Obtiene el estado del sistema de captura automática y estadísticas de cámaras.
+- `GET /model/info`: Devuelve información sobre el modelo de IA cargado.
+- `POST /model/config`: Permite actualizar la configuración del modelo (ej. umbral de confianza).
+- `GET /health`: Endpoint de healthcheck.
 
-## 📁 Estructura de archivos
+##  WebSocket Endpoint
+- `GET /ws/detections`: Endpoint para la conexión WebSocket. El servidor enviará mensajes JSON con nuevas detecciones. Formato del mensaje:
+  ```json
+  {
+    "type": "new_detection",
+    "data": {
+      "_id": "...",
+      "numero": "123",
+      "evento": "ingreso_tunel_A",
+      "tunel": "Tunel A",
+      "timestamp": "2024-06-10T12:00:00.000Z",
+      "modelo_ladrillo": null, // o el modelo detectado
+      "imagen_path": "uploads/...",
+      "confidence": 0.85,
+      "auto_captured": true,
+      "camera_id": "camara_entrada_A"
+    }
+  }
+  ```
+
+## 📁 Estructura de Archivos (Backend)
 ```
 backend/
-├── main.py                 # Punto de entrada FastAPI y definición de endpoints
-├── crud.py                # Operaciones CRUD optimizadas para MongoDB
-├── database.py            # Configuración y conexión a MongoDB
-├── schemas.py             # Modelos Pydantic para validación de datos
-├── init_db.py             # Inicialización de base de datos e índices
-├── requirements.txt       # Dependencias del proyecto
-├── models/                # 🆕 Modelos YOLO especializados
-│   ├── numeros_calados/   # Modelo para detección de números calados
-│   │   └── yolo_model/
-│   │       └── training/
-│   │           └── best.pt
-│   └── numeros_enteros/   # Modelo para números enteros (futuro)
+├── main.py                 # Punto de entrada FastAPI, endpoints API y WebSocket
+├── crud.py                 # Operaciones CRUD para MongoDB
+├── database.py             # Conexión a MongoDB y creación de índices
+├── schemas.py              # Modelos Pydantic para validación
+├── requirements.txt        # Dependencias
+├── cameras_config.json     # Configuración de cámaras para captura automática
+├── .env.example            # Ejemplo de archivo de variables de entorno
+├── models/                 # Modelos de IA
+│   └── numeros_enteros/
 │       └── yolo_model/
 │           └── training/
-│               └── best.pt
-└── utils/
-    ├── camera_capture.py      # Sistema de captura desde cámaras físicas
-    ├── image_processing.py    # Procesamiento avanzado con YOLO
-    ├── auto_capture_system.py # Sistema automático con cooldown
-    └── ocr.py                # OCR con Tesseract como fallback
+│               └── best.pt # Modelo YOLOv8 entrenado
+└── utils/                  # Módulos de utilidad
+    ├── auto_capture_system.py  # Lógica de captura automática
+    ├── image_processing.py     # Procesamiento de imágenes y detección
+    ├── camera_capture.py       # (Si se usa directamente para abstracción de cámara)
+    └── ocr.py                  # (Si se usa como fallback)
 ```
-
-## 🗄️ Base de datos # EN DESARROLLO
-- **MongoDB local**: `mongodb://localhost:27017`
-- **Base de datos**: `vagonetas_db`
-- **Colección principal**: `vagonetas`
-- **Campos especializados**:
-  - `numero_detectado`: Número extraído por YOLO
-  - `confianza_deteccion`: Nivel de confianza del modelo
-  - `tipo_deteccion`: "yolo" o "ocr_fallback"
-  - `coordenadas_bbox`: Bounding box de la detección
-  - `metadatos_modelo`: Información del modelo utilizado
-
-## 📚 Documentación EN DESARROLLO

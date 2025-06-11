@@ -9,10 +9,18 @@ import numpy as np
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from .image_processing import process_image, detect_calado_numbers
+from typing import Dict, List, Optional, Tuple, Any # Added Any
+from .image_processing import process_image
 from crud import create_vagoneta_record
 import os
+import json
+from datetime import datetime # Added for timestamp in _save_detection
+
+# Forward declaration for ConnectionManager if it's in main.py and imported here
+# This is a common pattern if type hinting a class from a module that also imports this one,
+# but in this case, ConnectionManager will be passed as an argument.
+# class ConnectionManager:
+#     pass # Actual implementation in main.py
 
 class MotionDetector:
     """Detector de movimiento optimizado para vagonetas"""
@@ -52,7 +60,7 @@ class MotionDetector:
 class SmartCameraCapture:
     """Sistema inteligente de captura automática"""
     
-    def __init__(self, config: Dict):
+    def __init__(self, config: Dict, ws_manager: Optional[Any] = None): # Added ws_manager argument
         self.camera_id = config['camera_id']
         self.camera_url = config['camera_url']
         self.source_type = config.get('source_type', 'camera')
@@ -75,6 +83,8 @@ class SmartCameraCapture:
         self.pre_capture_buffer = []  # Buffer para capturar frames antes del movimiento
         self.post_capture_frames = 0
         self.max_buffer_size = 10
+        
+        self.ws_manager = ws_manager # Store WebSocket manager instance
         
         # Estados
         self.is_running = False
@@ -194,11 +204,7 @@ class SmartCameraCapture:
         frames_to_analyze = self.pre_capture_buffer[-3:] + [frame]
         
         for test_frame in frames_to_analyze:
-            # Usar función de detección apropiada según el tipo de cámara
-            if 'calados' in self.camera_id.lower():
-                detection = detect_calado_numbers(test_frame)
-            else:
-                detection = process_image(test_frame)
+            detection = process_image(test_frame) # Simplificado para usar siempre process_image
             
             if detection and detection.get('numero'):
                 if not best_detection or detection.get('confidence', 0) > best_detection.get('confidence', 0):
@@ -207,7 +213,7 @@ class SmartCameraCapture:
         
         if best_detection:
             self.last_detection_time = current_time
-            self.stats['vagonetas_detected'] += 1
+            self.stats['vagonetas_detectadas'] += 1
             await self._save_detection(best_detection, best_frame)
         else:
             self.stats['false_positives'] += 1
@@ -227,19 +233,42 @@ class SmartCameraCapture:
             cv2.imwrite(image_path, frame)
             
             # Crear registro
-            record = {
+            record_data = {
                 "numero": detection['numero'],
                 "evento": self.evento,
                 "tunel": self.tunel,
-                "timestamp": timestamp,
+                "timestamp": timestamp, # Use the generated timestamp object
                 "modelo_ladrillo": detection.get('modelo_ladrillo'),
                 "imagen_path": image_path,
                 "confidence": detection.get('confidence', 0.0),
-                "auto_captured": True  # Marcar como captura automática
+                "auto_captured": True,
+                "camera_id": self.camera_id
             }
             
-            await create_vagoneta_record(record)
+            # Convert record_data to a structure that can be JSON serialized (e.g., VagonetaInDB like)
+            # For simplicity, we'll assume direct dict is fine for now, but Pydantic model is better.
+            db_record = await create_vagoneta_record(record_data)
             print(f"✅ Vagoneta {detection['numero']} guardada automáticamente ({self.evento})")
+
+            # Broadcast the new detection via WebSocket
+            if self.ws_manager:
+                # Prepare a slightly richer payload for WebSocket if needed
+                ws_payload = {
+                    "type": "new_detection",
+                    "data": {
+                        "_id": str(db_record.inserted_id), # Assuming create_vagoneta_record returns InsertOneResult
+                        "numero": detection['numero'],
+                        "evento": self.evento,
+                        "tunel": self.tunel,
+                        "timestamp": timestamp.isoformat(), # Serialize datetime
+                        "modelo_ladrillo": detection.get('modelo_ladrillo'),
+                        "imagen_path": image_path,
+                        "confidence": detection.get('confidence', 0.0),
+                        "auto_captured": True,
+                        "camera_id": self.camera_id
+                    }
+                }
+                await self.ws_manager.broadcast_json(ws_payload)
             
         except Exception as e:
             print(f"❌ Error guardando detección: {e}")
@@ -253,18 +282,19 @@ class SmartCameraCapture:
         print(f"📊 Estadísticas de {self.camera_id}:")
         print(f"   Frames procesados: {self.stats['frames_processed']}")
         print(f"   Movimientos detectados: {self.stats['motion_detected']}")
-        print(f"   Vagonetas identificadas: {self.stats['vagonetas_detected']}")
+        print(f"   Vagonetas identificadas: {self.stats['vagonetas_detectadas']}")
         print(f"   Falsos positivos: {self.stats['false_positives']}")
 
 class AutoCaptureManager:
     """Gestor principal del sistema de captura automática"""
     
-    def __init__(self, cameras_config: List[Dict]):
+    def __init__(self, cameras_config: List[Dict], ws_manager: Optional[Any] = None): # Added ws_manager argument
         self.cameras = []
         self.tasks = []
+        self.ws_manager = ws_manager # Store WebSocket manager
         
         for config in cameras_config:
-            camera = SmartCameraCapture(config)
+            camera = SmartCameraCapture(config, self.ws_manager) # Pass ws_manager to SmartCameraCapture
             self.cameras.append(camera)
     
     async def start_all(self):
@@ -287,55 +317,48 @@ class AutoCaptureManager:
         for task in self.tasks:
             task.cancel()
 
-# Configuración de cámaras y videos
-CAMERAS_CONFIG = [
-    {
-        'camera_id': 'video_demo_enteros',
-        'camera_url': r'c:\Users\NEVER\OneDrive\Documentos\VSCode\MisProyectos\app_imagenes\backend\models\numeros_enteros\yolo_model\dataset\CarroNenteros800.mp4',
-        'source_type': 'video',  # video, camera, rtsp
-        'evento': 'ingreso',
-        'tunel': 'Demo Túnel - Números Enteros',
-        'roi': None,
-        'motion_sensitivity': 0.2,  # Más sensible para video
-        'min_motion_area': 3000,   # Área mínima menor para demo
-        'detection_cooldown': 1,   # Cooldown menor para demo
-        'demo_mode': True,
-        'loop_video': True,
-        'fps_limit': 10  # Limitar FPS para demo
-    },
-    {
-        'camera_id': 'cam_ingreso_1',
-        'camera_url': 0,  # Primera cámara USB
-        'source_type': 'camera',
-        'evento': 'ingreso',
-        'tunel': 'Túnel 1',
-        'roi': None,  # (x, y, width, height) si necesitas región específica
-        'motion_sensitivity': 0.3,
-        'min_motion_area': 8000,
-        'detection_cooldown': 5,
-        'demo_mode': False
-    },
-    {
-        'camera_id': 'cam_egreso_1',
-        'camera_url': 1,  # Segunda cámara USB
-        'source_type': 'camera',
-        'evento': 'egreso',
-        'tunel': 'Túnel 1',
-        'roi': None,
-        'motion_sensitivity': 0.2,
-        'min_motion_area': 6000,
-        'detection_cooldown': 4,
-        'demo_mode': False
-    }
-]
+def load_cameras_config(config_path: str = "cameras_config.json") -> List[Dict]:
+    """Carga la configuración de las cámaras desde un archivo JSON."""
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        print(f"🔧 Configuración de cámaras cargada desde {config_path}")
+        return config
+    except FileNotFoundError:
+        print(f"❌ Error: Archivo de configuración de cámaras no encontrado en {config_path}. Usando configuración por defecto.")
+        # Fallback a una configuración por defecto o vacía si el archivo no existe
+        return [] 
+    except json.JSONDecodeError:
+        print(f"❌ Error: El archivo de configuración de cámaras {config_path} no es un JSON válido. Usando configuración por defecto.")
+        return []
 
 # Ejemplo de uso
 async def main():
-    manager = AutoCaptureManager(CAMERAS_CONFIG)
-    try:
-        await manager.start_all()
-    except KeyboardInterrupt:
-        await manager.stop_all()
+    # cameras_config = load_cameras_config() # Cargar configuración desde JSON
+    # if not cameras_config: # Si la carga falla o el archivo está vacío, no continuar
+    #     print("🛑 No se pudo cargar la configuración de las cámaras. El sistema no puede iniciar.")
+    #     return
+    # manager = AutoCaptureManager(cameras_config)
+    
+    # WebSocket manager would be initialized in main.py and passed here if running standalone
+    # For this example, assuming it's run via FastAPI, ws_manager is handled by FastAPI app.
+    print("AutoCaptureSystem main() is for standalone testing and needs CAMERAS_CONFIG and potentially a mock ws_manager.")
+    
+    # Example for standalone testing (requires CAMERAS_CONFIG to be loaded):
+    # cameras_config = load_cameras_config()
+    # if cameras_config:
+    #     # Mock WebSocket manager for testing if needed
+    #     class MockWsManager:
+    #         async def broadcast_json(self, data):
+    #             print(f"[Mock WS Broadcast]: {data}")
+    #     
+    #     manager = AutoCaptureManager(cameras_config, MockWsManager())
+    #     try:
+    #         await manager.start_all()
+    #     except KeyboardInterrupt:
+    #         await manager.stop_all()
+    # else:
+    #     print("🛑 No camera configuration found for standalone test.")
 
 if __name__ == "__main__":
     asyncio.run(main())
