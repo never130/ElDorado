@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Spinner from "./Spinner";
+import { API_BASE_URL, API_ENDPOINTS } from "../config/api"; // Corregida la importación
 
 const Historial = () => {
   const [registros, setRegistros] = useState([]);
@@ -10,12 +11,18 @@ const Historial = () => {
 
   const fetchRegistros = async () => {
     setLoading(true);
-    let params = {};
-    if (numero) params.numero = numero;
-    if (fecha) params.fecha = fecha;
     try {
-      const res = await axios.get("http://localhost:8000/vagonetas/", { params });
-      setRegistros(res.data);
+      const params = {};
+      if (numero) params.numero = numero;
+      if (fecha) params.fecha = fecha;
+
+      // Usar las constantes importadas directamente
+      const res = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.vagonetas}`, { params }); 
+      let data = res.data.map(item => ({
+        ...item,
+        timestamp: new Date(item.timestamp), // Asegurarse de que el timestamp sea un objeto Date
+      }));
+      setRegistros(data);
     } catch (err) {
       setRegistros([]);
     }

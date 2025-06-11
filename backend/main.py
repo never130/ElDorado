@@ -29,86 +29,86 @@ import asyncio
 import base64
 import io
 from utils.image_processing import processor
+import uuid # Asegúrate de que uuid esté importado
+import json # Para serializar los datos de SSE
+import traceback
 
 # Función para procesar videos MP4
-async def procesar_video_mp4(video_path: str) -> Optional[str]: # Asegurar que Optional se importa de typing
+async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
     """
-    Procesa un video MP4 frame por frame para detectar números de vagonetas
-    Retorna el primer número detectado con alta confianza
+    Procesa un video MP4 frame por frame para detectar números de vagonetas,
+    emitiendo actualizaciones de progreso.
     """
+    yield {"type": "status", "stage": "initialization", "message": f"Iniciando procesamiento de video: {Path(video_path).name}"}
+    
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        yield {"type": "error", "stage": "initialization", "message": f"Error al abrir el video: {video_path}"}
+        return
+
+    detections = {}
+    frame_count = 0
+    processed_frames_dir = upload_dir / "processed_frames" / str(uuid.uuid4())
+    os.makedirs(processed_frames_dir, exist_ok=True)
+    
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    yield {"type": "progress", "stage": "setup", "message": "Video abierto y listo para procesar.", "total_frames": total_frames, "current_frame": 0}
+
     try:
-        print(f"📹 Iniciando procesamiento de video: {video_path}")
-
-        cap = cv2.VideoCapture(video_path)
-
-        if not cap.isOpened():
-            raise ValueError(f"No se pudo abrir el video: {video_path}")
-
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        print(f"📊 Video info: {total_frames} frames, {fps:.2f} FPS")
-
-        frame_count = 0
-        frames_to_skip = max(1, int(fps // 3))
-        max_frames = min(50, total_frames // frames_to_skip)
-
-        numeros_detectados = []
-
-        while cap.isOpened() and frame_count < max_frames:
-            for _ in range(frames_to_skip):
-                ret_skip = cap.read()[0]
-                if not ret_skip:
-                    break
-            if not cap.isOpened() or not ret_skip:
-                break
-
+        while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
+                yield {"type": "status", "stage": "frame_processing", "message": "Fin de los frames o error al leer."}
                 break
+            
+            frame_count += 1
+            if frame_count % 5 != 0:  # Procesar cada 5 frames para optimizar
+                if frame_count % 100 == 0: # Send a heartbeat progress for skipped frames less frequently
+                    yield {"type": "progress", "stage": "frame_processing", "message": f"Avanzando video...", "current_frame": frame_count, "total_frames": total_frames}
+                continue
 
-            print(f"🔍 Procesando frame {frame_count + 1}/{max_frames}")
+            yield {"type": "progress", "stage": "frame_processing", "message": f"Procesando frame {frame_count}/{total_frames}", "current_frame": frame_count, "total_frames": total_frames}
+
+            if frame is None or frame.size == 0:
+                yield {"type": "warning", "stage": "frame_processing", "message": f"Frame {frame_count} es None o está vacío."}
+                continue
+
+            # temp_frame_path = processed_frames_dir / f"frame_{frame_count}.jpg"
+            # cv2.imwrite(str(temp_frame_path), frame) # Opcional: guardar frame
 
             try:
-                cropped_placa_img, bbox_vagoneta, bbox_placa, numero, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+                _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+                
+                if numero_detectado and confianza_placa is not None:
+                    yield {
+                        "type": "detection_update", 
+                        "stage": "frame_processing",
+                        "frame": frame_count, 
+                        "numero": numero_detectado, 
+                        "confianza": float(confianza_placa) # Asegurar que sea float para JSON
+                    }
+                    if numero_detectado not in detections or confianza_placa > detections[numero_detectado]:
+                        detections[numero_detectado] = confianza_placa
+            except Exception as e_detect:
+                yield {"type": "warning", "stage": "frame_processing", "message": f"Error detectando en frame {frame_count}: {str(e_detect)}"}
+                # traceback.print_exc() # Podrías querer loguearlo en servidor en lugar de enviarlo siempre
 
-                if numero and numero.strip():
-                    numeros_detectados.append(numero.strip())
-                    print(f"✅ Número detectado en frame {frame_count}: {numero}")
-
-                    if len(numeros_detectados) >= 3:
-                        ultimo_numero = numeros_detectados[-1]
-                        count_ultimo = numeros_detectados[-10:].count(ultimo_numero)
-                        if count_ultimo >= 3:
-                            print(f"🏁 Detección consistente de '{ultimo_numero}', finalizando procesamiento de video.")
-                            cap.release()
-                            return ultimo_numero
-                else:
-                    print(f"❌ No se detectó número en frame {frame_count}")
-
-            except Exception as frame_error:
-                import traceback
-                print(f"⚠️ Error procesando frame {frame_count}: {str(frame_error)}")
-                traceback.print_exc()
-
-            frame_count += 1
-
-        cap.release()
-
-        if numeros_detectados:
-            numero_mas_comun = max(set(numeros_detectados), key=numeros_detectados.count)
-            frecuencia = numeros_detectados.count(numero_mas_comun)
-            print(f"📈 Números detectados: {numeros_detectados}")
-            print(f"🏆 Número más común: {numero_mas_comun} (detectado {frecuencia} veces)")
-            return numero_mas_comun
-        else:
-            print("❌ No se detectó ningún número en todo el video")
-            return None
-
-    except Exception as e:
-        import traceback
-        print(f"💥 Error GRANDE procesando video: {str(e)}")
+    except Exception as e_video:
+        yield {"type": "error", "stage": "video_processing_error", "message": f"Error mayor durante el procesamiento del video: {str(e_video)}"}
         traceback.print_exc()
-        return None
+        # No emitir final_result si hay un error catastrófico aquí
+        return 
+    finally:
+        cap.release()
+        yield {"type": "status", "stage": "cleanup", "message": f"Video {Path(video_path).name} procesado. Total frames leídos: {frame_count}."}
+        # shutil.rmtree(processed_frames_dir) # Opcional: limpiar frames
+
+    if not detections:
+        yield {"type": "final_result", "stage": "completion", "data": None, "message": "No se detectaron números en el video."}
+    else:
+        # Asegurar que la confianza sea float para JSON
+        final_detections_serializable = {k: float(v) for k, v in detections.items()}
+        yield {"type": "final_result", "stage": "completion", "data": final_detections_serializable, "message": "Detecciones finales recopiladas."}
 
 # Función auxiliar para convertir string a float
 def parse_merma(merma_str: str) -> Optional[float]:
@@ -131,6 +131,7 @@ app = FastAPI(
 @app.on_event("startup")
 async def startup_db_client():
     connect_to_mongo()
+    app.state.pending_video_processing = {} # Inicializar el almacén de tareas
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
@@ -148,6 +149,8 @@ app.add_middleware(
 # Carpeta donde se guardan las imágenes subidas
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+TEMP_CHUNK_DIR = UPLOAD_DIR / "temp_chunks"
+TEMP_CHUNK_DIR.mkdir(exist_ok=True)
 
 # Sirve las imágenes subidas como archivos estáticos
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -206,7 +209,8 @@ async def upload_image(
             metadata=metadata
         )
         
-        record_id = await crud.create_vagoneta_record(vagoneta)
+        # Quitar await porque create_vagoneta_record es síncrona
+        record_id = crud.create_vagoneta_record(vagoneta) 
         
         return {
             "message": "Registro creado exitosamente",
@@ -263,10 +267,24 @@ async def upload_files(
             
             if is_image:
                 # Procesar imagen
-                cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado = detectar_vagoneta_y_placa_mejorado(str(save_path))
+                cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(str(save_path))
+                # Solo detectar modelo de ladrillo para imágenes directamente
+                modelo_ladrillo = detectar_modelo_ladrillo(str(save_path))
             else:
                 # Procesar video
-                numero_detectado = await procesar_video_mp4(str(save_path))
+                detection_results = await procesar_video_mp4(str(save_path), UPLOAD_DIR)
+                numero_detectado = None # Inicializar
+                confianza_placa = None # Inicializar para videos
+                if detection_results:
+                    if isinstance(detection_results, dict) and detection_results:
+                        # Tomar el número con la mayor confianza
+                        if detection_results: # Asegurarse que no está vacío
+                            numero_detectado = max(detection_results, key=detection_results.get)
+                            confianza_placa = detection_results[numero_detectado]
+                        
+                # Para videos, no intentamos detectar el modelo de ladrillo de la misma manera que una imagen única.
+                # Podría implementarse una lógica para analizar frames individuales si es necesario.
+                modelo_ladrillo = None
             
             if not numero_detectado:
                 try:
@@ -280,27 +298,28 @@ async def upload_files(
                 })
                 continue
             
-            modelo_ladrillo = detectar_modelo_ladrillo(str(save_path))
-            
             vagoneta = VagonetaCreate(
                 numero=numero_detectado,
-                imagen_path=f"uploads/{save_path.name}",
+                imagen_path=f"uploads/{save_path.name}", # Guardar la ruta del video original
                 timestamp=datetime.utcnow(),
                 tunel=tunel,
                 evento=evento,
-                modelo_ladrillo=modelo_ladrillo,
+                modelo_ladrillo=modelo_ladrillo, # Será None para videos por ahora
                 merma=parse_merma(merma),
-                metadata=metadata
+                metadata=metadata,
+                confianza=confianza_placa # Añadir confianza al registro
             )
             
-            record_id = await crud.create_vagoneta_record(vagoneta)
+            # Quitar await porque create_vagoneta_record es síncrona
+            record_id = crud.create_vagoneta_record(vagoneta) 
             
             results.append({
                 "filename": file.filename,
                 "status": "ok",
                 "record_id": record_id,
                 "numero_detectado": numero_detectado,
-                "modelo_ladrillo": modelo_ladrillo
+                "modelo_ladrillo": modelo_ladrillo,
+                "confianza": confianza_placa
             })
             
         except Exception as e:
@@ -316,124 +335,329 @@ async def upload_files(
     
     return {"results": results}
 
-@app.get("/vagonetas/",
-    response_model=List[VagonetaInDB],
-    summary="Consultar historial de vagonetas",
-    description="Consulta el historial con múltiples filtros disponibles.")
-async def get_vagonetas(
-    numero: Optional[str] = Query(None, description="Número de vagoneta"),
-    fecha: Optional[str] = Query(None, description="Fecha en formato YYYY-MM-DD"),
-    tunel: Optional[str] = Query(None, description="Filtrar por túnel"),
-    modelo: Optional[str] = Query(None, description="Filtrar por modelo de ladrillo"),
-    evento: Optional[str] = Query(None, description="Filtrar por tipo de evento"),
-    merma_min: Optional[float] = Query(None, ge=0, le=100, description="Merma mínima"),
-    merma_max: Optional[float] = Query(None, ge=0, le=100, description="Merma máxima"),
-    skip: int = Query(0, ge=0, description="Registros a saltar"),
-    limit: int = Query(50, ge=1, le=100, description="Límite de registros")
-):
-    registros = crud.get_vagonetas_historial(
-        skip=skip,
-        limit=limit,
-        numero=numero,
-        fecha=fecha,
-        tunel=tunel,
-        modelo=modelo,
-        evento=evento,
-        merma_min=merma_min,
-        merma_max=merma_max
-    )
-    return registros
+# --- ENDPOINTS PARA SUBIDA EN TROZOS (CHUNKING) ---
 
-@app.get("/trayectoria/{numero}",
-    response_model=Dict,
-    summary="Trayectoria completa de vagoneta",
-    description="Obtiene todos los eventos y estadísticas de una vagoneta específica.")
-async def trayectoria_vagoneta(numero: str):
-    registros = crud.get_trayectoria_completa(numero)
-    estadisticas = crud.get_estadisticas_vagoneta(numero)
-    
-    if not registros:
-        raise HTTPException(status_code=404, detail="Vagoneta no encontrada")
-    
-    return {
-        "numero": numero,
-        "eventos": registros,
-        "estadisticas": estadisticas
-    }
-
-@app.delete("/vagonetas/{record_id}",
-    summary="Anular registro",
-    description="Anula (soft delete) un registro específico.")
-async def anular_registro(record_id: str):
-    success = await crud.anular_registro(record_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Registro no encontrado")
-    return {"message": "Registro anulado exitosamente"}
-
-@app.put("/vagonetas/{record_id}",
-    summary="Actualizar registro",
-    description="Actualiza campos específicos de un registro.")
-async def actualizar_registro(
-    record_id: str,
-    data: Dict
-):
-    success = await crud.actualizar_registro(record_id, data)
-    if not success:
-        raise HTTPException(status_code=404, detail="Registro no encontrado")
-    return {"message": "Registro actualizado exitosamente"}
-
-@app.get("/search",
-    response_model=List[VagonetaInDB],
-    summary="Búsqueda de texto",
-    description="Búsqueda de texto completo en registros.")
-async def buscar_registros(
-    q: str = Query(..., min_length=2, description="Texto a buscar"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100)
-):
-    return await crud.buscar_vagonetas(q, skip, limit)
-
-# --- ENDPOINTS DE CÁMARAS ---
-
-@app.post("/cameras/start",
-    summary="Iniciar cámara",
-    description="Inicia la captura automática desde una cámara.")
-async def start_camera(
-    camera_config: dict,
-    background_tasks: BackgroundTasks
+@app.post("/upload-chunk/")
+async def upload_chunk(
+    fileChunk: UploadFile = File(...),
+    fileId: str = Form(...),
+    chunkNumber: int = Form(...),
+    totalChunks: int = Form(...),
+    originalFilename: str = Form(...)
 ):
     try:
-        camera = CameraCapture(**camera_config)
-        active_cameras[camera_config["camera_id"]] = camera
-        background_tasks.add_task(camera.start)
-        return {"message": f"Cámara {camera_config['camera_id']} iniciada"}
+        chunk_dir = TEMP_CHUNK_DIR / fileId
+        chunk_dir.mkdir(exist_ok=True)
+        
+        chunk_path = chunk_dir / f"chunk_{chunkNumber}"
+        with open(chunk_path, "wb") as buffer:
+            shutil.copyfileobj(fileChunk.file, buffer)
+        
+        print(f"📦 Recibido chunk {chunkNumber + 1}/{totalChunks} para {originalFilename} (ID: {fileId})")
+        
+        # Opcional: verificar si todos los chunks han llegado y ensamblar aquí
+        # si no se quiere un endpoint /finalize-upload/ separado para cada archivo.
+        # Por ahora, separamos la finalización.
+
+        return {"message": f"Chunk {chunkNumber + 1}/{totalChunks} for {originalFilename} received successfully."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ Error recibiendo chunk para {originalFilename} (ID: {fileId}): {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing chunk: {str(e)}")
 
-@app.post("/cameras/stop/{camera_id}",
-    summary="Detener cámara",
-    description="Detiene la captura de una cámara específica.")
-async def stop_camera(camera_id: str):
-    if camera_id in active_cameras:
-        await active_cameras[camera_id].stop()
-        del active_cameras[camera_id]
-        return {"message": f"Cámara {camera_id} detenida"}
-    raise HTTPException(status_code=404, detail="Cámara no encontrada")
+@app.post("/finalize-upload/")
+async def finalize_upload(
+    fileId: str = Form(...),
+    originalFilename: str = Form(...),
+    totalChunks: int = Form(...),
+    tunel: str = Form(None),
+    evento: str = Form(...),
+    merma: str = Form(None),
+    metadata_str: Optional[str] = Form(None)
+):
+    import json # Mover import json dentro si solo se usa aquí
+    metadata: Optional[Dict] = None
+    if metadata_str:
+        try:
+            metadata = json.loads(metadata_str)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid metadata JSON string")
 
-@app.get("/cameras/status",
-    summary="Estado de cámaras",
-    description="Obtiene el estado de todas las cámaras activas.")
-def get_cameras_status():
-    return {
-        camera_id: {
-            "evento": camera.evento,
-            "tunel": camera.tunel,
-            "is_running": camera.is_running,
-            "last_detection": camera.last_detection_time,
-            "detection_count": camera.detection_count if hasattr(camera, 'detection_count') else 0
+    chunk_dir = TEMP_CHUNK_DIR / fileId
+    if not chunk_dir.exists():
+        raise HTTPException(status_code=404, detail=f"No chunks found for file ID: {fileId}")
+
+    # Verificar que todos los chunks están presentes
+    for i in range(totalChunks):
+        chunk_path = chunk_dir / f"chunk_{i}"
+        if not chunk_path.exists():
+            # Limpiar chunks si falta alguno antes de fallar
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"Missing chunk {i} for file ID: {fileId}")
+
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    final_save_path = UPLOAD_DIR / f"{timestamp}_{originalFilename}"
+    
+    print(f"🧩 Ensamblando archivo: {final_save_path} desde {totalChunks} chunks (ID: {fileId})")
+    try:
+        with open(final_save_path, "wb") as final_file:
+            for i in range(totalChunks):
+                chunk_path = chunk_dir / f"chunk_{i}"
+                with open(chunk_path, "rb") as chunk_file:
+                    final_file.write(chunk_file.read())
+        print(f"✅ Archivo {originalFilename} ensamblado exitosamente en {final_save_path}")
+        shutil.rmtree(chunk_dir)
+        print(f"🧹 Chunks temporales para {fileId} eliminados.")
+    except Exception as e:
+        # ... (manejo de error de ensamblaje y limpieza como antes) ...
+        print(f"❌ Error ensamblando archivo {originalFilename} (ID: {fileId}): {e}")
+        traceback.print_exc()
+        if chunk_dir.exists():
+            shutil.rmtree(chunk_dir, ignore_errors=True)
+        if final_save_path.exists():
+            try:
+                os.remove(final_save_path)
+            except OSError: pass
+        raise HTTPException(status_code=500, detail=f"Error assembling file: {str(e)}")
+
+    # Determinar tipo de archivo
+    file_ext = Path(originalFilename).suffix.lower()
+    is_image = file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']
+    is_video = file_ext in ['.mp4', '.avi', '.mov', '.mkv']
+
+    if is_image:
+        try:
+            print(f"🖼️  Procesando imagen ensamblada: {final_save_path}")
+            _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(str(final_save_path))
+            modelo_ladrillo = detectar_modelo_ladrillo(str(final_save_path))
+
+            if not numero_detectado:
+                try: os.remove(final_save_path)
+                except OSError: pass
+                return JSONResponse(
+                    content={"message": f"No se detectó vagoneta con número en {originalFilename}", "status": "ignored", "filename": originalFilename},
+                    status_code=200
+                )
+
+            vagoneta_data = VagonetaCreate(
+                numero=numero_detectado,
+                imagen_path=f"uploads/{final_save_path.name}",
+                timestamp=datetime.utcnow(),
+                tunel=tunel,
+                evento=evento,
+                modelo_ladrillo=modelo_ladrillo,
+                merma=parse_merma(merma),
+                metadata=metadata,
+                confianza=confianza_placa
+            )
+            record_id = crud.create_vagoneta_record(vagoneta_data)
+            
+            response_data = {
+                "filename": originalFilename, "status": "ok", "record_id": str(record_id),
+                "numero_detectado": numero_detectado, "modelo_ladrillo": modelo_ladrillo,
+                "confianza": confianza_placa, "message": f"File {originalFilename} processed and record created successfully."
+            }
+            return JSONResponse(content=response_data)
+        except Exception as e:
+            if final_save_path.exists():
+                try: os.remove(final_save_path)
+                except OSError: pass
+            print(f"❌ Error procesando imagen ensamblada {originalFilename}: {e}")
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error processing assembled image: {str(e)}")
+
+    elif is_video:
+        processing_id = str(uuid.uuid4())
+        app.state.pending_video_processing[processing_id] = {
+            "video_path": str(final_save_path),
+            "original_filename": originalFilename,
+            "upload_dir": str(UPLOAD_DIR), # Convertir Path a str para almacenar en dict/JSON
+            "tunel": tunel,
+            "evento": evento,
+            "merma_str": merma, # Guardar como string, parsear luego
+            "metadata": metadata, # Ya es un dict o None
+            "timestamp": datetime.utcnow() # Para posible limpieza de tareas antiguas
         }
-        for camera_id, camera in active_cameras.items()
-    }
+        print(f"📹 Video {originalFilename} listo para procesamiento en segundo plano. ID: {processing_id}")
+        return JSONResponse(content={
+            "status": "video_processing_pending",
+            "processing_id": processing_id,
+            "filename": originalFilename,
+            "message": "El video está siendo procesado. Conéctese al stream para ver el progreso."
+        })
+    else:
+        if final_save_path.exists():
+            try: os.remove(final_save_path)
+            except OSError: pass
+        raise HTTPException(status_code=400, detail=f"Unsupported file type after assembly: {file_ext}")
+
+
+@app.get("/stream-video-processing/{processing_id}")
+async def stream_video_processing(processing_id: str):
+    if processing_id not in app.state.pending_video_processing:
+        # Podríamos devolver un SSE de error aquí también para consistencia si el cliente espera SSE
+        # For now, a simple HTTP error is fine.
+        raise HTTPException(status_code=404, detail="Video processing ID not found or already processed.")
+
+    task_info = app.state.pending_video_processing[processing_id]
+
+    async def event_generator():
+        final_detection_data = None
+        processing_error_occurred = False
+        try:
+            yield f"data: {json.dumps({'type': 'status', 'stage': 'stream_init', 'message': 'Conectado al stream de procesamiento de video.'})}\\n\\n"
+            
+            async for update in procesar_video_mp4_streamable(task_info["video_path"], Path(task_info["upload_dir"])):
+                yield f"data: {json.dumps(update)}\\n\\n"
+                if update.get("type") == "final_result":
+                    final_detection_data = update.get("data")
+                if update.get("type") == "error": # Un error grave dentro de procesar_video_mp4_streamable
+                    processing_error_occurred = True
+
+
+            # Procesamiento de video (iteración sobre procesar_video_mp4_streamable) ha terminado
+            if processing_error_occurred:
+                 yield f"data: {json.dumps({'type': 'status', 'stage': 'completion_error', 'message': 'El procesamiento del video falló.'})}\\n\\n"
+                 # No intentar crear registro en BD si el procesamiento falló gravemente
+            elif final_detection_data:
+                numero_detectado_final = None
+                confianza_placa_final = None
+                
+                # Lógica para obtener la mejor detección del video
+                best_numero_from_video = None
+                max_confianza_from_video = -1.0
+                if isinstance(final_detection_data, dict): # final_detection_data es el dict de detections
+                    for num, conf in final_detection_data.items():
+                        if isinstance(conf, (float, int)) and conf > max_confianza_from_video:
+                            max_confianza_from_video = conf
+                            best_numero_from_video = num
+                
+                if best_numero_from_video is not None:
+                    numero_detectado_final = best_numero_from_video
+                    confianza_placa_final = max_confianza_from_video
+
+                if numero_detectado_final:
+                    vagoneta_to_create = VagonetaCreate(
+                        numero=numero_detectado_final,
+                        imagen_path=f"uploads/{Path(task_info['video_path']).name}",
+                        timestamp=datetime.utcnow(), # Usar un timestamp fresco para el registro
+                        tunel=task_info["tunel"],
+                        evento=task_info["evento"],
+                        modelo_ladrillo=None, # No se detecta para videos
+                        merma=parse_merma(task_info["merma_str"]),
+                        metadata=task_info["metadata"],
+                        confianza=confianza_placa_final
+                    )
+                    try:
+                        record_id = crud.create_vagoneta_record(vagoneta_to_create)
+                        db_response = {
+                            "type": "db_record_created", "stage": "db_creation_success",
+                            "status": "ok", "record_id": str(record_id),
+                            "numero_detectado": numero_detectado_final,
+                            "confianza": confianza_placa_final,
+                            "filename": task_info["original_filename"],
+                            "message": f"Video {task_info['original_filename']} procesado y registro creado."
+                        }
+                        yield f"data: {json.dumps(db_response)}\\n\\n"
+                    except Exception as e_crud:
+                        print(f"Error creando registro en BD para video {task_info['original_filename']}: {e_crud}")
+                        traceback.print_exc()
+                        error_db_response = {
+                            "type": "db_error", "stage": "db_creation_failure",
+                            "status": "error", "filename": task_info["original_filename"],
+                            "message": f"Error al crear registro en BD para {task_info['original_filename']}: {str(e_crud)}"
+                        }
+                        yield f"data: {json.dumps(error_db_response)}\\n\\n"
+                else: # Hubo final_result pero no se extrajo un numero_detectado_final (ej. vacío)
+                    no_detection_response = {
+                        "type": "no_detection_final", "stage": "completion_no_detection",
+                        "status": "ignored", "filename": task_info["original_filename"],
+                        "message": f"No se detectó vagoneta con número en video {task_info['original_filename']} después del análisis."
+                    }
+                    yield f"data: {json.dumps(no_detection_response)}\\n\\n"
+                    # Opcional: eliminar archivo si no hubo detección útil
+                    try: os.remove(task_info["video_path"])
+                    except OSError: pass
+            
+            elif not processing_error_occurred and final_detection_data is None: # No hubo error grave, pero final_result fue None
+                no_data_response = {
+                    "type": "no_detection_final", "stage": "completion_no_data",
+                    "status": "ignored", "filename": task_info["original_filename"],
+                    "message": f"El procesamiento del video {task_info['original_filename']} finalizó sin datos de detección."
+                }
+                yield f"data: {json.dumps(no_data_response)}\\n\\n"
+                try: os.remove(task_info["video_path"])
+                except OSError: pass
+
+            yield f"data: {json.dumps({'type': 'stream_end', 'stage': 'finished', 'message': 'Stream de procesamiento finalizado.'})}\\n\\n"
+        
+        finally:
+            # Limpiar la tarea del diccionario
+            if processing_id in app.state.pending_video_processing:
+                del app.state.pending_video_processing[processing_id]
+            print(f"Tarea de procesamiento {processing_id} para {task_info.get('original_filename', 'video desconocido')} finalizada y eliminada.")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+# --- ENDPOINTS DE CONSULTA ---
+
+@app.get("/historial/", 
+    response_model=List[VagonetaInDB],
+    summary="Obtener historial de registros",
+    description="Recupera una lista paginada de todos los registros de vagonetas.")
+async def get_historial_registros(
+    skip: int = Query(0, ge=0, description="Número de registros a saltar para paginación"),
+    limit: int = Query(10, ge=1, le=100, description="Número máximo de registros a devolver")
+):
+    db = get_database()
+    registros_cursor = db.vagonetas.find().sort("timestamp", -1).skip(skip).limit(limit)
+    
+    registros_list = []
+    async for r_doc in registros_cursor:
+        model_data = dict(r_doc)
+        # Ensure 'id' is a string representation of '_id'
+        model_data["id"] = str(model_data.pop("_id", None)) # Use pop to remove _id, provide default
+        
+        if isinstance(model_data.get("timestamp"), datetime):
+            model_data["timestamp"] = model_data["timestamp"].isoformat()
+        
+        # Ensure all fields required by VagonetaInDB are present or Pydantic will use defaults/raise errors
+        # This step is simplified; Pydantic handles missing fields based on model definitions (Optional, default values)
+        
+        # Defaulting potentially missing optional fields to None if not present in DB document
+        # and not automatically handled by Pydantic model if it expects them.
+        # This is more explicit for fields that might be missing in older documents.
+        for field_name in VagonetaInDB.__fields__:
+            if field_name not in model_data and field_name != 'id': # 'id' is handled from '_id'
+                 # Check if the field in Pydantic model has a default value or is Optional
+                pydantic_field = VagonetaInDB.__fields__[field_name]
+                if not pydantic_field.required and pydantic_field.default is None:
+                    model_data[field_name] = None
+        
+        try:
+            vagoneta_in_db = VagonetaInDB(**model_data)
+            registros_list.append(vagoneta_in_db)
+        except Exception as e_model: 
+            print(f"Error creando VagonetaInDB para el registro {model_data.get('id')}: {e_model}. Data: {model_data}")
+            continue
+            
+    return registros_list
+
+@app.get("/registros/{registro_id}", 
+    response_model=VagonetaInDB,
+    summary="Obtener un registro específico",
+    description="Recupera un registro de vagoneta por su ID.")
+async def get_registro_por_id(registro_id: str):
+    db = get_database()
+    registro = await db.vagonetas.find_one({"_id": registro_id})
+    
+    if registro is not None:
+        # Convertir ObjectId a string
+        registro["_id"] = str(registro["_id"])
+        return VagonetaInDB(**registro)
+    
+    raise HTTPException(status_code=404, detail="Registro no encontrado")
 
 @app.get("/health",
     summary="Healthcheck",
@@ -656,81 +880,6 @@ async def get_model_config():
             }
         }
         
-        return {"status": "success", "config": config}
-        
-    except Exception as e:
-        return {"status": "error", "message": f"Error obteniendo configuración: {str(e)}"}
-
-@app.put("/model/config")
-async def update_model_config(new_config: dict):
-    """Actualiza la configuración del modelo"""
-    try:
-        from utils.image_processing import processor
-        
-        if "confidence_threshold" in new_config:
-            new_threshold = float(new_config["confidence_threshold"])
-            if 0.1 <= new_threshold <= 1.0:
-                processor.min_confidence = new_threshold
-            else:
-                raise ValueError("confidence_threshold debe estar entre 0.1 y 1.0")
-        
-        return {"status": "success", "message": "Configuración actualizada", "new_config": new_config}
-        
-    except Exception as e:
-        return {"status": "error", "message": f"Error actualizando configuración: {str(e)}"}
-
-@app.post("/test/detection")
-async def test_detection_with_sample():
-    """Prueba la detección con imagen de muestra"""
-    try:
-        # Podrías implementar una prueba con una imagen de ejemplo
-        sample_image_path = r"c:\\Users\\NEVER\\OneDrive\\Documentos\\VSCode\\MisProyectos\\app_imagenes\\backend\\models\\numeros_enteros\\yolo_model\\dataset"
-        
-        # Buscar archivos de imagen en el directorio
-        import glob
-        image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
-        sample_files = []
-        
-        for ext in image_extensions:
-            sample_files.extend(glob.glob(os.path.join(sample_image_path, ext)))
-            sample_files.extend(glob.glob(os.path.join(sample_image_path, "**", ext), recursive=True))
-        
-        if not sample_files:
-            return {"status": "error", "message": "No se encontraron imágenes de muestra"}
-        
-        # Usar la primera imagen encontrada
-        test_image = sample_files[0]
-        
-        from utils.image_processing import detectar_vagoneta_y_placa_mejorado
-        
-        # Probar detección mejorada
-        # Actualizado para desempaquetar 5 valores
-        cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(test_image)
-        
-        result = {
-            "status": "success",
-            "test_image": os.path.basename(test_image),
-            "numero_detectado": numero_detectado,
-            "confianza_placa": confianza_placa, # Añadido
-            "bbox_placa": bbox_placa.tolist() if bbox_placa is not None else None,
-            "bbox_vagoneta": bbox_vagoneta.tolist() if bbox_vagoneta is not None else None,
-            "deteccion_exitosa": numero_detectado is not None
-        }
-        
-        return result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en prueba de detección: {str(e)}")
-
-@app.post("/debug/test-detection")
-async def debug_test_detection(file: UploadFile = File(...)):
-    """Endpoint de debug para probar detección en imagen específica"""
-    try:
-        # Guardar imagen temporal
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        temp_path = UPLOAD_DIR / f"debug_{timestamp}_{file.filename}"
-        
-        with temp_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         print(f"🔍 DEBUG: Procesando imagen {temp_path}")
@@ -742,7 +891,7 @@ async def debug_test_detection(file: UploadFile = File(...)):
         confianza_placa_mejorado = None # Añadido
         try:
             # Actualizado para desempaquetar 5 valores
-            cropped_placa_img_mejorado, bbox_vagoneta_mejorado, bbox_placa_mejorado, numero_detectado_mejorado, confianza_placa_mejorado = detectar_vagoneta_y_placa_mejorado(str(temp_path))
+            cropped_placa_img_mejorado, bbox_vagoneta_mejorado, bbox_placa_mejorado, numero_detectado_mejorado, confianza_placa_mejorada = detectar_vagoneta_y_placa_mejorado(str(temp_path))
             print(f"📊 DEBUG: Resultado detección mejorada: {numero_detectado_mejorado}, Confianza: {confianza_placa_mejorada}")
         except Exception as e:
             print(f"❌ DEBUG: Error en detección mejorada: {str(e)}")
@@ -751,7 +900,7 @@ async def debug_test_detection(file: UploadFile = File(...)):
             # bbox_vagoneta_mejorado ya está inicializado a None
             # bbox_placa_mejorado ya está inicializado a None
             # numero_detectado_mejorado ya está inicializado a None
-            # confianza_placa_mejorado ya está inicializado a None
+            # confianza_placa_mejorada ya está inicializado a None
         
         # Probar detección estándar como respaldo
         numero_estandar = None
@@ -793,7 +942,7 @@ async def debug_test_detection(file: UploadFile = File(...)):
                 "bbox_placa": bbox_placa_std.tolist() if bbox_placa_std is not None else None       # Añadido para consistencia
             },
             "model_info": {
-                "confidence_threshold": processor.min_confidence,
+                "confidence_threshold": processor.min_confianza,
                 "model_classes": len(processor.model.names)
             }
         }
@@ -820,7 +969,7 @@ async def debug_test_sample_video():
             "sample_video": "CarroNenteros800.mp4",
             "numero_detectado": numero_detectado,
             "model_config": {
-                "confidence_threshold": processor.min_confidence,
+                "confidence_threshold": processor.min_confianza,
                 "model_path": "numeros_enteros/yolo_model/training/best.pt",
                 "classes_count": len(processor.model.names)
             }
@@ -830,22 +979,22 @@ async def debug_test_sample_video():
         return {"status": "error", "message": str(e)}
 
 @app.post("/debug/adjust-confidence")
-async def debug_adjust_confidence(new_confidence: float):
+async def debug_adjust_confidence(new_confidence_value: float = Form(...)):
     """Ajusta dinámicamente el umbral de confianza del modelo"""
     try:
-        if not (0.01 <= new_confidence <= 1.0):
+        if not (0.01 <= new_confidence_value <= 1.0):
             return {"status": "error", "message": "La confianza debe estar entre 0.01 y 1.0"}
         
-        old_confidence = processor.min_confidence
-        processor.min_confidence = new_confidence
+        old_confidence_val = processor.min_confidence
+        processor.min_confidence = new_confidence_value
         
-        print(f"🔧 Confianza ajustada: {old_confidence} → {new_confidence}")
+        print(f"🔧 Confianza ajustada: {old_confidence_val} → {new_confidence_value}")
         
         return {
             "status": "success",
-            "message": f"Confianza ajustada de {old_confidence} a {new_confidence}",
-            "old_confidence": old_confidence,
-            "new_confidence": new_confidence
+            "message": f"Confianza ajustada de {old_confidence_val} a {new_confidence_value}",
+            "old_confianza": old_confidence_val,
+            "new_confianza": new_confidence_value
         }
         
     except Exception as e:

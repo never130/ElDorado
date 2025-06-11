@@ -6,7 +6,7 @@ export const apiUrl = (endpoint) => `${API_BASE_URL}${endpoint}`;
 
 // URLs específicas comunes
 export const API_ENDPOINTS = {
-  vagonetas: '/vagonetas/',
+  vagonetas: '/historial/',
   autoCapture: {
     start: '/auto-capture/start',
     stop: '/auto-capture/stop',

@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
+// import Spinner from './Spinner'; // Comentado si no se usa
+// import { Link } from 'react-router-dom'; // Comentado si no se usa
+import { API_BASE_URL, API_ENDPOINTS } from '../config/api'; // Corregida la importación
 
 const RealTimeMonitor = () => {
   const [recentDetections, setRecentDetections] = useState([]);
@@ -7,16 +10,11 @@ const RealTimeMonitor = () => {
   const [autoStatus, setAutoStatus] = useState('stopped');
   const [modelInfo, setModelInfo] = useState(null);
 
-  useEffect(() => {
-    const interval = setInterval(fetchData, 2000); // Actualizar cada 2 segundos
-    fetchData();
-    return () => clearInterval(interval);
-  }, []);
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      // Obtener detecciones recientes
-      const recentRes = await axios.get('http://localhost:8000/vagonetas/', {
-        params: { limit: 10, order: 'desc' }
+      // Usar las constantes importadas directamente
+      const recentRes = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.vagonetas}`, {
+        params: { limit: 5 } 
       });
       setRecentDetections(recentRes.data.slice(0, 10));
 
@@ -33,7 +31,13 @@ const RealTimeMonitor = () => {
     } catch (error) {
       console.error('Error fetching real-time data:', error);
     }
-  };
+  }, [modelInfo]);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 10000); // Actualizar cada 10 segundos
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const DetectionCard = ({ detection }) => {
     const timeAgo = (timestamp) => {

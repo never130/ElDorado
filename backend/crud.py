@@ -9,7 +9,7 @@ from bson import ObjectId
 def create_vagoneta_record(data: VagonetaCreate) -> str:
     db = get_database()
     doc = data.dict()
-    result = db.vagonetas.insert_one(doc)
+    result = db.vagonetas.insert_one(doc)  # MODIFIED: Removed await
     return str(result.inserted_id)
 
 def get_vagonetas_historial(
