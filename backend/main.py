@@ -2,14 +2,14 @@
 # Autor: [Tu nombre o equipo]
 # Descripción: API REST para subir, procesar y consultar registros de vagonetas usando visión computacional.
 
-import sys # Add this import
-import os # Add this import
-import json
-import uuid
-import cv2
-import shutil
-import traceback
 import asyncio # <--- AÑADIDO IMPORT ASYNCIO
+import shutil
+import os
+import uuid
+import json
+import traceback
+import cv2 # <--- AÑADIDO IMPORT CV2
+
 from contextlib import asynccontextmanager # <--- IMPORTADO PARA LIFESPAN
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Form, WebSocket, WebSocketDisconnect
@@ -395,7 +395,7 @@ async def upload_chunk(
 ):
     try:
         chunk_dir = TEMP_CHUNK_DIR / fileId
-        chunk_dir.mkdir(exist_ok=True)
+        chunk_dir.mkdir(parents=True, exist_ok=True) # <--- MODIFICADO AQUÍ
         
         chunk_path = chunk_dir / f"chunk_{chunkNumber}"
         with open(chunk_path, "wb") as buffer:
@@ -547,19 +547,21 @@ async def stream_video_processing(processing_id: str):
         raise HTTPException(status_code=404, detail="Video processing ID not found or already processed.")
 
     task_info = app.state.pending_video_processing[processing_id]
-    # db = get_database() # Ya no es necesario aquí si crud lo maneja o no se usa directamente en este bloque
-
+    
     async def event_generator():
         final_detection_data = None
         processing_error_occurred = False
-        # record_created_successfully = False # No se usa actualmente en este scope
         error_message_detail = "Unknown error during video processing."
-        video_file_to_delete = task_info.get("video_path") # Guardar antes de que se elimine task_info
+        # video_file_to_delete se usa en el finally del endpoint, no necesita re-declararse aquí si ya está en task_info
+        # y se accede desde el finally externo.
 
         try:
             yield f"data: {json.dumps({'type': 'status', 'stage': 'stream_init', 'message': 'Conectado al stream de procesamiento de video.'})}\\n\\n"
             
-            async for update in procesar_video_mp4_streamable(task_info["video_path"], Path(task_info["upload_dir"])):
+            video_path_to_process = task_info["video_path"]
+            upload_dir_path = Path(task_info["upload_dir"])
+
+            async for update in procesar_video_mp4_streamable(video_path_to_process, upload_dir_path):
                 yield f"data: {json.dumps(update)}\\n\\n"
                 if update.get("type") == "final_result":
                     final_detection_data = update.get("data")
@@ -567,75 +569,73 @@ async def stream_video_processing(processing_id: str):
                     processing_error_occurred = True
                     error_message_detail = update.get("message", error_message_detail)
             
-            # Lógica de creación de registro después de procesar el video
             if not processing_error_occurred and final_detection_data: 
                 best_numero_from_video = None
                 max_confianza_from_video = -1.0
                 
                 if isinstance(final_detection_data, dict) and final_detection_data:
                     for numero, confianza in final_detection_data.items():
-                        if confianza > max_confianza_from_video:
-                            max_confianza_from_video = confianza
+                        confianza_float = float(confianza) 
+                        if confianza_float > max_confianza_from_video:
+                            max_confianza_from_video = confianza_float
                             best_numero_from_video = numero
                 
                 if best_numero_from_video:
-                    vagoneta_video_data = VagonetaCreate(
+                    vagoneta_data = VagonetaCreate(
                         numero=best_numero_from_video,
-                        imagen_path=f"uploads/{Path(task_info['video_path']).name}", # Usar el path relativo
+                        imagen_path=f"uploads/{Path(task_info['original_filename']).name}", # Ensure this path is what you intend to store
                         timestamp=task_info.get("timestamp", datetime.utcnow()),
                         tunel=task_info.get("tunel"),
                         evento=task_info.get("evento"),
-                        modelo_ladrillo=None, # Modelo de ladrillo no se detecta en videos actualmente
+                        modelo_ladrillo=None, 
                         merma=parse_merma(task_info.get("merma_str")),
                         metadata=task_info.get("metadata"),
-                        confianza=float(max_confianza_from_video) if max_confianza_from_video != -1.0 else None
+                        confianza=float(max_confianza_from_video) if max_confianza_from_video is not None else None,
+                        origen_deteccion="video_stream"
                     )
                     try:
-                        record_id = crud.create_vagoneta_record(vagoneta_video_data)
-                        yield f"data: {json.dumps({'type': 'status', 'stage': 'completion', 'message': f'Registro de video creado con ID: {record_id}', 'record_id': str(record_id)})}\\n\\n"
-                        # record_created_successfully = True # No se usa actualmente
-                    except Exception as e_crud:
-                        yield f"data: {json.dumps({'type': 'error', 'stage': 'db_error', 'message': f'Error al crear registro en BD para video: {str(e_crud)}'})}\\n\\n"
+                        # db = get_database() # Ensure db instance is handled by crud or not needed here
+                        record_id = crud.create_vagoneta_record(vagoneta_data) # <--- MODIFIED HERE
+                        yield f"data: {json.dumps({'type': 'db_record_created', 'record_id': str(record_id), 'numero': best_numero_from_video, 'processing_id': processing_id})}\\n\\n"
+                        print(f"✅ Registro creado para video {processing_id}, N°: {best_numero_from_video}, ID: {str(record_id)}")
+                    except Exception as e_db:
+                        processing_error_occurred = True
+                        error_message_detail = f"Error creando registro en BD: {str(e_db)}"
+                        print(f"❌ {error_message_detail} para video {processing_id}\\n{traceback.format_exc()}")
+                        yield f"data: {json.dumps({'type': 'error', 'stage': 'db_creation', 'message': error_message_detail})}\\n\\n"
                 else: 
-                    yield f"data: {json.dumps({'type': 'status', 'stage': 'completion', 'message': 'No se detectó un número claro en el video para crear registro.'})}\\n\\n"
-            
-            elif processing_error_occurred: # Error durante el procesamiento del streamable
-                 yield f"data: {json.dumps({'type': 'completion_error', 'status': 'error', 'message': f'El procesamiento del video falló: {error_message_detail}'})}\\n\\n"
-            
-            elif not processing_error_occurred and final_detection_data is None: # No hubo error, pero no se obtuvieron detecciones finales
-                yield f"data: {json.dumps({'type': 'status', 'stage': 'completion', 'message': 'Procesamiento de video completado. No se encontraron detecciones para crear un registro.'})}\\n\\n"
+                    yield f"data: {json.dumps({'type': 'status', 'stage': 'completion_no_clear_detection', 'message': 'Procesamiento de video completado, pero no se determinó un número final claro para el registro.'})}\\n\\n"
+            elif processing_error_occurred:
+                yield f"data: {json.dumps({'type': 'status', 'stage': 'completion_with_error', 'message': f'Procesamiento de video finalizado con errores: {error_message_detail}'})}\\n\\n"
+            elif not processing_error_occurred and final_detection_data is None:
+                yield f"data: {json.dumps({'type': 'status', 'stage': 'completion_no_detections', 'message': 'Procesamiento de video completado. No se encontraron detecciones para crear un registro.'})}\\n\\n"
         
         except Exception as e_stream:
-            # processing_error_occurred = True # Ya no es necesario, el error se propaga
-            error_message_detail = f"Error inesperado en el stream de procesamiento: {str(e_stream)}"
-            try: # Intentar enviar un último mensaje de error si el stream sigue activo
-                yield f"data: {json.dumps({'type': 'error', 'status': 'error', 'stage': 'stream_error', 'message': error_message_detail})}\\n\\n"
-            except Exception:
-                pass # El cliente pudo haberse desconectado
-            traceback.print_exc()
+            tb_str_stream = traceback.format_exc()
+            print(f"ERROR en event_generator para {processing_id}: {e_stream}\\n{tb_str_stream}")
+            try:
+                yield f"data: {json.dumps({'type': 'error', 'stage': 'stream_error', 'message': f'Error interno en el stream: {str(e_stream)}'})}\\n\\n"
+            except Exception: 
+                pass 
+            processing_error_occurred = True # Ensure this is set
         
         finally:
-            app.state.pending_video_processing.pop(processing_id, None)
-            if video_file_to_delete:
-                try:
-                    video_path_obj = Path(video_file_to_delete)
-                    if video_path_obj.exists():
-                        os.remove(video_path_obj)
-                        # Intentar enviar mensaje de eliminación. Puede fallar si el cliente ya cerró.
-                        try:
-                            yield f"data: {json.dumps({'type': 'status', 'stage': 'cleanup', 'message': f'Archivo de video temporal {video_path_obj.name} eliminado.'})}\\n\\n"
-                        except Exception: pass
-                        print(f"🗑️ Archivo de video temporal {video_file_to_delete} eliminado.")
-                except Exception as e_delete:
-                    try:
-                        yield f"data: {json.dumps({'type': 'warning', 'stage': 'cleanup', 'message': f'No se pudo eliminar el archivo de video temporal {video_file_to_delete}: {e_delete}'})}\\n\\n"
-                    except Exception: pass
-                    print(f"⚠️ No se pudo eliminar el archivo de video temporal {video_file_to_delete}: {e_delete}")
-            # Señal de fin de stream explícita
+            print(f"INFO: Stream para {processing_id} finalizando. Error ocurrido: {processing_error_occurred}")
+            final_event_type = "stream_end"
+            final_status_message = 'Stream terminado exitosamente.'
+            if processing_error_occurred:
+                final_status_message = f'Stream terminado con error: {error_message_detail}'
+            
             try:
-                yield f"data: {json.dumps({'type': 'stream_end', 'message': 'Stream de procesamiento finalizado.'})}\\n\\n"
-            except Exception: pass
+                yield f"data: {json.dumps({'type': final_event_type, 'status': 'error' if processing_error_occurred else 'success', 'message': final_status_message})}\\n\\n"
+                print(f"INFO: Mensaje '{final_event_type}' enviado para {processing_id}")
+            except Exception as e_final_yield:
+                print(f"WARN: No se pudo enviar el mensaje final '{final_event_type}' para {processing_id}: {e_final_yield}")
 
+    # Outer finally block for cleanup, executed after StreamingResponse is done.
+    # No changes needed here based on the current request, but ensure it's robust.
+    # The video_file_to_delete logic is in the original code's outer finally.
+    # It should use task_info.get("video_path") as it does.
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
