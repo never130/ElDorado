@@ -11,8 +11,8 @@ __pycache__/
 # Carpetas de uploads temporales (si no deben estar en el repositorio)
 # Si la carpeta 'uploads/' o 'extracted_frames/' contiene solo archivos temporales
 # que no necesitas versionar, puedes descomentar las líneas correspondientes.
-# uploads/
-# extracted_frames/
+uploads/
+extracted_frames/
 
 # Archivos de configuración de IDEs (opcional, a veces mejor en el .gitignore raíz)
 # .vscode/

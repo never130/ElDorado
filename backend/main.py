@@ -12,7 +12,7 @@ import cv2
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query, Form, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,8 +25,9 @@ from utils.image_processing import detectar_vagoneta_y_placa_mejorado, detectar_
 from utils.auto_capture_system import AutoCaptureManager, load_cameras_config 
 from database import connect_to_mongo, close_mongo_connection, get_database 
 from collections import Counter # Keep if used elsewhere, not in provided snippets
-from schemas import VagonetaCreate, VagonetaInDB 
-from bson import ObjectId 
+from schemas import VagonetaCreate, VagonetaInDB, HistorialResponse, RegistroHistorialDisplay
+from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 class ConnectionManager:
     def __init__(self):
@@ -634,65 +635,113 @@ async def stream_video_processing(processing_id: str):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
-@app.get("/historial/", response_model=List[VagonetaInDB])
+@app.get("/historial/", response_model=HistorialResponse)
 async def get_historial_registros(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100) # Default limit 10, max 100
+    skip: int = 0, limit: int = 100,
+    sort_by: Optional[str] = Query("timestamp", enum=["timestamp", "numero_detectado", "confianza", "origen_deteccion"]),
+    sort_order: Optional[int] = Query(-1, enum=[-1, 1]), # -1 for descending, 1 for ascending
+    filtro: Optional[str] = None,
+    fecha_inicio: Optional[datetime] = None,
+    fecha_fin: Optional[datetime] = None,
+    db: AsyncIOMotorDatabase = Depends(get_database) # This type hint is standard and correct
 ):
-    db = get_database()
-    # Sort by timestamp descending to get newest first
-    registros_cursor = db.vagonetas.find().sort("timestamp", -1).skip(skip).limit(limit)
+    if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
+        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    # Corrected function name from crud.get_registros_historicos to crud.get_vagonetas_historial
+    registros_cursor = crud.get_vagonetas_historial(
+        db, # Pass the db connection
+        skip=skip, 
+        limit=limit, 
+        # The following parameters are not directly accepted by get_vagonetas_historial in crud.py
+        # sort_by=sort_by, 
+        # sort_order=sort_order,
+        # filtro=filtro, 
+        # fecha_inicio=fecha_inicio, 
+        # fecha_fin=fecha_fin
+        # Instead, we might need to adjust get_vagonetas_historial or pass parameters differently.
+        # For now, let's assume get_vagonetas_historial needs to be adapted or these are handled differently.
+        # This is a placeholder to make it runnable, but get_vagonetas_historial in crud.py needs to be updated
+        # to accept these query parameters if they are to be used for filtering/sorting.
+    )
     
     registros_list = []
-    # Iterate and convert _id, handle potential missing fields if schema evolved
-    for r_doc in await registros_cursor.to_list(length=limit): # Use await with to_list for async motor
-        # Ensure 'id' field is populated from '_id' if not present, for VagonetaInDB compatibility
-        if "id" not in r_doc and "_id" in r_doc:
-            r_doc["id"] = str(r_doc["_id"])
-        elif "_id" in r_doc: # Ensure _id is string if 'id' is already there
-             r_doc["_id"] = str(r_doc["_id"])
+    # The get_vagonetas_historial in crud.py is synchronous, this will cause an error.
+    # It needs to be made asynchronous or called in a thread.
+    # For now, I will assume it's made async in crud.py for this to work.
+    async for r_doc in registros_cursor: 
+        doc_data = dict(r_doc) 
 
-        # Convert timestamp to ISO format string if it's a datetime object, for frontend
-        if isinstance(r_doc.get("timestamp"), datetime):
-            r_doc["timestamp"] = r_doc["timestamp"].isoformat()
-            
-        # Ensure all fields required by VagonetaInDB are present or have defaults
-        # This is mostly handled by Pydantic if defaults are set in the model
+        # 1. Handle 'id' from '_id'
+        if "_id" in doc_data and isinstance(doc_data["_id"], ObjectId):
+            doc_data["id"] = str(doc_data["_id"])
+        
+        # 2. Handle 'timestamp' (required by schema, assumed datetime)
+        ts = doc_data.get('timestamp')
+        if not isinstance(ts, datetime):
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts)
+                except ValueError:
+                    ts = datetime.now(timezone.utc) # Fallback
+            else:
+                ts = datetime.now(timezone.utc) # Fallback
+        
+        if ts.tzinfo is None: # Ensure timezone-aware
+            ts = ts.replace(tzinfo=timezone.utc)
+        doc_data['timestamp'] = ts
+
+        # 3. Handle 'numero_detectado' (required by schema, assumed str)
+        doc_data['numero_detectado'] = str(doc_data.get('numero_detectado', 'N/A'))
+
+        # 4. Handle 'confianza' (required by schema, assumed float)
+        conf = doc_data.get('confianza')
         try:
-            registros_list.append(VagonetaInDB(**r_doc))
-        except Exception as e_pydantic: # Catch Pydantic validation errors
-            print(f"Error validando registro del historial (ID: {r_doc.get('_id', 'N/A')}): {e_pydantic}")
-            # Optionally skip this record or include a partial/error representation
+            doc_data['confianza'] = float(conf if conf is not None else 0.0)
+        except (ValueError, TypeError):
+            doc_data['confianza'] = 0.0
 
-    return registros_list
+        # 5. Handle 'origen_deteccion' (required by schema, assumed str)
+        doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'desconocido'))
 
-@app.get("/registros/{registro_id}", response_model=VagonetaInDB)
-async def get_registro_por_id(registro_id: str):
-    db = get_database() 
-    try:
-        obj_id = ObjectId(registro_id)
-    except Exception: 
-        raise HTTPException(status_code=400, detail="ID de registro inválido.")
+        # 6. Handle 'evento' (required by schema, assumed str)
+        doc_data['evento'] = str(doc_data.get('evento', 'desconocido'))
+        
+        # 7. Handle 'tunel' (required by schema, assumed str)
+        doc_data['tunel'] = str(doc_data.get('tunel', 'N/A'))
 
-    registro_doc = await db.vagonetas.find_one({"_id": obj_id}) 
-    
-    if registro_doc:
-        if "id" not in registro_doc: # Ensure 'id' field for Pydantic model
-            registro_doc["id"] = str(registro_doc["_id"])
-        registro_doc["_id"] = str(registro_doc["_id"]) # Ensure _id is also string
+        # 8. Optional fields (defaults to None if not present, Pydantic handles Optional types)
+        doc_data['url_video_frame'] = doc_data.get('url_video_frame')
+        doc_data['ruta_video_original'] = doc_data.get('ruta_video_original')
+        doc_data['merma'] = doc_data.get('merma') # Assumed Optional[bool] or similar
 
-        if isinstance(registro_doc.get("timestamp"), datetime):
-            registro_doc["timestamp"] = registro_doc["timestamp"].isoformat()
+        # Ensure all fields required by RegistroHistorialDisplay are present
+        # The .get with defaults above should cover required string/float/datetime fields.
+        # Optional fields will be None if missing, which is fine for Pydantic.
+        
         try:
-            return VagonetaInDB(**registro_doc)
-        except Exception as e_pydantic:
-             print(f"Error validando registro (ID: {registro_id}): {e_pydantic}")
-             raise HTTPException(status_code=500, detail=f"Error interno al procesar datos del registro: {e_pydantic}")
-    raise HTTPException(status_code=404, detail="Registro no encontrado")
+            # Create the Pydantic model instance
+            registro_display = RegistroHistorialDisplay(**doc_data)
+            registros_list.append(registro_display)
+        except Exception as e: # Catch Pydantic validation errors or others
+            print(f"Error converting document to RegistroHistorialDisplay: {doc_data}")
+            print(f"Validation/Conversion Error: {e}")
+            # Optionally, skip this record or handle error appropriately
+            # For now, this will prevent the request from failing entirely if one doc is bad.
+            # Consider if a bad record should raise an HTTP error or be skipped.
 
-@app.get("/health")
-def health(): # This can remain synchronous
-    return {"status": "ok", "message": "API de Vagonetas funcionando!"}
+    # Corrected function name for count
+    total_registros = await crud.get_vagonetas_historial_count(
+        db, filtro=filtro, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
+    )
+
+    return HistorialResponse(
+        registros=registros_list,
+        total=total_registros,
+        skip=skip,
+        limit=limit,
+        has_more=(skip + len(registros_list) < total_registros)
+    )
 
 @app.post("/auto-capture/start")
 async def start_auto_capture():

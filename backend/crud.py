@@ -107,3 +107,32 @@ def actualizar_registro(
         {"$set": update_data}
     )
     return result.modified_count > 0
+
+async def get_vagonetas_historial_count(
+    db: Any, # Should be AsyncIOMotorDatabase, but using Any for broader compatibility if get_database() changes
+    filtro: Optional[str] = None,
+    fecha_inicio: Optional[datetime] = None,
+    fecha_fin: Optional[datetime] = None
+) -> int:
+    query: Dict[str, Any] = {}
+    if filtro:
+        # Assuming 'filtro' searches in 'numero_detectado' or other relevant text fields
+        # This might need to be adjusted based on how 'filtro' is intended to work (e.g., regex, specific fields)
+        query["$or"] = [
+            {"numero_detectado": {"$regex": filtro, "$options": "i"}},
+            {"evento": {"$regex": filtro, "$options": "i"}},
+            {"tunel": {"$regex": filtro, "$options": "i"}}
+        ]
+
+    if fecha_inicio and fecha_fin:
+        query["timestamp"] = {"$gte": fecha_inicio, "$lte": fecha_fin}
+    elif fecha_inicio:
+        query["timestamp"] = {"$gte": fecha_inicio}
+    elif fecha_fin:
+        query["timestamp"] = {"$lte": fecha_fin}
+    
+    # Add any other fixed query parameters if necessary, e.g., {"estado": "activo"}
+    # query["estado"] = "activo" # Uncomment if you only want active records
+
+    count = await db.vagonetas.count_documents(query)
+    return count
