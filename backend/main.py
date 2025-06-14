@@ -646,30 +646,16 @@ async def get_historial_registros(
     db: AsyncIOMotorDatabase = Depends(get_database) # This type hint is standard and correct
 ):
     if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
-        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)
-
-    # Corrected function name from crud.get_registros_historicos to crud.get_vagonetas_historial
-    registros_cursor = crud.get_vagonetas_historial(
-        db, # Pass the db connection
+        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)    # Fixed function call to match crud.get_vagonetas_historial signature
+    registros_from_db = crud.get_vagonetas_historial(
         skip=skip, 
-        limit=limit, 
-        # The following parameters are not directly accepted by get_vagonetas_historial in crud.py
-        # sort_by=sort_by, 
-        # sort_order=sort_order,
-        # filtro=filtro, 
-        # fecha_inicio=fecha_inicio, 
-        # fecha_fin=fecha_fin
-        # Instead, we might need to adjust get_vagonetas_historial or pass parameters differently.
-        # For now, let's assume get_vagonetas_historial needs to be adapted or these are handled differently.
-        # This is a placeholder to make it runnable, but get_vagonetas_historial in crud.py needs to be updated
-        # to accept these query parameters if they are to be used for filtering/sorting.
-    )
-    
+        limit=limit
+        # Note: The current crud function doesn't support filtering by sort_by, sort_order, 
+        # filtro, fecha_inicio, fecha_fin - these need to be implemented later
+    )    
     registros_list = []
-    # The get_vagonetas_historial in crud.py is synchronous, this will cause an error.
-    # It needs to be made asynchronous or called in a thread.
-    # For now, I will assume it's made async in crud.py for this to work.
-    async for r_doc in registros_cursor: 
+    # get_vagonetas_historial returns a list, not a cursor, so iterate normally
+    for r_doc in registros_from_db:
         doc_data = dict(r_doc) 
 
         # 1. Handle 'id' from '_id'
@@ -689,31 +675,34 @@ async def get_historial_registros(
         
         if ts.tzinfo is None: # Ensure timezone-aware
             ts = ts.replace(tzinfo=timezone.utc)
-        doc_data['timestamp'] = ts
-
-        # 3. Handle 'numero_detectado' (required by schema, assumed str)
-        doc_data['numero_detectado'] = str(doc_data.get('numero_detectado', 'N/A'))
+        doc_data['timestamp'] = ts        # 3. Handle 'numero_detectado' (required by schema, assumed str)
+        # Map from 'numero' field in old schema to 'numero_detectado' in new schema
+        doc_data['numero_detectado'] = str(doc_data.get('numero', 'N/A'))
 
         # 4. Handle 'confianza' (required by schema, assumed float)
         conf = doc_data.get('confianza')
         try:
             doc_data['confianza'] = float(conf if conf is not None else 0.0)
         except (ValueError, TypeError):
-            doc_data['confianza'] = 0.0
-
-        # 5. Handle 'origen_deteccion' (required by schema, assumed str)
-        doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'desconocido'))
+            doc_data['confianza'] = 0.0        # 5. Handle 'origen_deteccion' (required by schema, assumed str)
+        # Since this is a new field, set a default value
+        doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'historico'))
 
         # 6. Handle 'evento' (required by schema, assumed str)
         doc_data['evento'] = str(doc_data.get('evento', 'desconocido'))
-        
-        # 7. Handle 'tunel' (required by schema, assumed str)
-        doc_data['tunel'] = str(doc_data.get('tunel', 'N/A'))
+          # 7. Handle 'tunel' (required by schema, assumed str)
+        doc_data['tunel'] = str(doc_data.get('tunel', 'N/A')) if doc_data.get('tunel') is not None else None
 
-        # 8. Optional fields (defaults to None if not present, Pydantic handles Optional types)
+        # 8. Handle 'merma' field - convert to string if it exists
+        merma_val = doc_data.get('merma')
+        if merma_val is not None:
+            doc_data['merma'] = str(merma_val)
+        else:
+            doc_data['merma'] = None
+
+        # 9. Optional fields (defaults to None if not present, Pydantic handles Optional types)
         doc_data['url_video_frame'] = doc_data.get('url_video_frame')
         doc_data['ruta_video_original'] = doc_data.get('ruta_video_original')
-        doc_data['merma'] = doc_data.get('merma') # Assumed Optional[bool] or similar
 
         # Ensure all fields required by RegistroHistorialDisplay are present
         # The .get with defaults above should cover required string/float/datetime fields.
