@@ -5,7 +5,7 @@ from datetime import datetime
 class VagonetaBase(BaseModel):
     """Modelo base para registros de vagonetas"""
     numero: Optional[str] = Field(None, description="Número identificador de la vagoneta")
-    confianza: Optional[float] = Field(None, description="Confianza de la detección de la placa") # Added field
+    confianza: Optional[float] = Field(None, description="Confianza de la detección de la placa", ge=0.0, le=1.0)
     imagen_path: str = Field(..., description="Ruta de la imagen almacenada")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Fecha y hora del evento")
     tunel: Optional[str] = Field(None, description="Identificador del túnel")

@@ -87,15 +87,14 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
         cv2.rectangle(frame, (x1_min, y1_min), (x2_max, y2_max), (255, 0, 0), 3)
         cv2.putText(frame, numero_compuesto, (x1_min, y1_min - 10), 
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        
-        # Dibujar confianza
+          # Dibujar confianza
         confianza_texto = f"Conf: {mejor_confianza/len(mejor_grupo):.2f}"
         cv2.putText(frame, confianza_texto, (x1_min, y2_max + 20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     info_deteccion = {
         'numero': numero_compuesto,
-        'confidence': mejor_confianza / len(mejor_grupo),  # Confianza promedio real
+        'confidence': min(mejor_confianza / len(mejor_grupo), 1.0),  # Asegurar que nunca sea > 1.0
         'bbox': bbox_completo,
         'detecciones_individuales': len(mejor_grupo),
         'grupos_totales': len(grupos),

@@ -101,11 +101,11 @@ const Historial = () => {
                 <th className="px-4 py-2 font-bold text-cyan-700">Modelo</th>
                 <th className="px-4 py-2 font-bold text-cyan-700">Merma</th>
                 <th className="px-4 py-2 font-bold text-cyan-700">Confianza</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Origen</th>
-                <th className="px-4 py-2 font-bold text-cyan-700">Fecha</th>
+                <th className="px-4 py-2 font-bold text-cyan-700">Origen</th>                <th className="px-4 py-2 font-bold text-cyan-700">Fecha</th>
                 <th className="px-4 py-2 font-bold text-cyan-700">Imagen</th>
               </tr>
-            </thead>            <tbody>
+            </thead>
+            <tbody>
               {registros.length > 0 ? registros.map((r, idx) => (
                 <tr key={r.id || idx} className={r.auto_captured ? 'bg-green-50' : ''}>
                   <td className="px-4 py-2 border-b font-semibold text-orange-700">{r.numero || r.numero_detectado || "-"}</td>
