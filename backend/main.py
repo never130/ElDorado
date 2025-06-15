@@ -717,11 +717,9 @@ async def get_historial_registros(
             print(f"Validation/Conversion Error: {e}")
             # Optionally, skip this record or handle error appropriately
             # For now, this will prevent the request from failing entirely if one doc is bad.
-            # Consider if a bad record should raise an HTTP error or be skipped.
-
-    # Corrected function name for count
-    total_registros = await crud.get_vagonetas_historial_count(
-        db, filtro=filtro, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
+            # Consider if a bad record should raise an HTTP error or be skipped.    # Fixed function call - no await needed since function is now synchronous
+    total_registros = crud.get_vagonetas_historial_count(
+        filtro=filtro, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
     )
 
     return HistorialResponse(

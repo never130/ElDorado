@@ -178,11 +178,13 @@ const Upload = () => {
       try {
         const data = JSON.parse(event.data);
         let serverMessage = data.message || '';
-        let currentProgressState = {};
-        let shouldCloseEventSource = false;
+        let currentProgressState = {};        let shouldCloseEventSource = false;
         let isTerminalEvent = false;
 
-        console.log(`SSE (${fileId} - ${filename}):`, data); // Log para depuración
+        // Solo loggear eventos importantes para evitar spam
+        if (data.type === 'error' || data.type === 'stream_end' || data.type === 'final_result') {
+          console.log(`SSE (${fileId} - ${filename}):`, data);
+        }
 
         if (data.type === 'status' && data.stage === 'stream_init') {
           serverMessage = data.message || 'Stream iniciado.';

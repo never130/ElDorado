@@ -8,25 +8,48 @@ const Historial = () => {
   const [numero, setNumero] = useState("");
   const [fecha, setFecha] = useState("");
   const [loading, setLoading] = useState(false);
-
   const fetchRegistros = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (numero) params.numero = numero;
-      if (fecha) params.fecha = fecha;
+      const params = { limit: 10, skip: 0 }; // Add pagination params
+      if (numero) params.filtro = numero; // Changed from 'numero' to 'filtro' to match backend
+      // Note: fecha filter needs to be implemented on backend
+      if (fecha) {
+        params.fecha_inicio = fecha + 'T00:00:00Z';
+        params.fecha_fin = fecha + 'T23:59:59Z';
+      }
 
-      // Usar las constantes importadas directamente
+      // Use the historial endpoint
       const res = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.vagonetas}`, { params }); 
       console.log("Datos crudos de la API:", res.data); // Para depuración
-      let data = res.data.map(item => ({
-        ...item,
-        // Asegurar que el timestamp se interprete como UTC añadiendo 'Z' si no está presente
-        timestamp: new Date(item.timestamp && !item.timestamp.endsWith('Z') ? item.timestamp + 'Z' : item.timestamp),
-        confianza: item.confianza // Asegurar que la propiedad se llame confianza consistentemente
-      }));
+      
+      // Handle new response structure with HistorialResponse
+      const responseData = res.data;
+      let data = [];
+      
+      if (responseData && responseData.registros && Array.isArray(responseData.registros)) {
+        data = responseData.registros.map(item => ({
+          ...item,
+          // Map new field names to old ones for compatibility
+          numero: item.numero_detectado || item.numero,
+          // Handle timestamp properly
+          timestamp: new Date(item.timestamp && !item.timestamp.endsWith('Z') ? item.timestamp + 'Z' : item.timestamp),
+          confianza: item.confianza,
+          // Map additional fields
+          origen_deteccion: item.origen_deteccion || 'desconocido'
+        }));
+      } else if (Array.isArray(responseData)) {
+        // Fallback for old response format
+        data = responseData.map(item => ({
+          ...item,
+          timestamp: new Date(item.timestamp && !item.timestamp.endsWith('Z') ? item.timestamp + 'Z' : item.timestamp),
+          confianza: item.confianza
+        }));
+      }
+      
       setRegistros(data);
     } catch (err) {
+      console.error("Error fetching historial:", err);
       setRegistros([]);
     }
     setLoading(false);
@@ -68,7 +91,8 @@ const Historial = () => {
       {loading ? (
         <div className="flex justify-center items-center py-8"><Spinner size={32} /></div>
       ) : (
-        <div className="w-full overflow-x-auto">          <table className="min-w-full bg-white border border-cyan-200 rounded-xl shadow text-cyan-900 text-base">
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-full bg-white border border-cyan-200 rounded-xl shadow text-cyan-900 text-base">
             <thead className="bg-cyan-100">
               <tr>
                 <th className="px-4 py-2 font-bold text-orange-600">N°</th>
@@ -81,11 +105,10 @@ const Historial = () => {
                 <th className="px-4 py-2 font-bold text-cyan-700">Fecha</th>
                 <th className="px-4 py-2 font-bold text-cyan-700">Imagen</th>
               </tr>
-            </thead>
-            <tbody>
-              {registros.map((r, idx) => (
-                <tr key={idx} className={r.auto_captured ? 'bg-green-50' : ''}>
-                  <td className="px-4 py-2 border-b font-semibold text-orange-700">{r.numero || "-"}</td>
+            </thead>            <tbody>
+              {registros.length > 0 ? registros.map((r, idx) => (
+                <tr key={r.id || idx} className={r.auto_captured ? 'bg-green-50' : ''}>
+                  <td className="px-4 py-2 border-b font-semibold text-orange-700">{r.numero || r.numero_detectado || "-"}</td>
                   <td className="px-4 py-2 border-b">
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${
                       r.evento === 'ingreso' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
@@ -103,7 +126,8 @@ const Historial = () => {
                   </td>
                   <td className="px-4 py-2 border-b">{r.merma !== null && r.merma !== undefined ? `${r.merma}%` : "-"}</td>
                   <td className="px-4 py-2 border-b">
-                    {r.confianza !== null && r.confianza !== undefined ? r.confianza.toFixed(4) : "-"}
+                    {r.confianza !== null && r.confianza !== undefined ? 
+                      (typeof r.confianza === 'number' ? (r.confianza * 100).toFixed(1) + '%' : r.confianza) : "-"}
                   </td>
                   <td className="px-4 py-2 border-b">{r.origen_deteccion || "-"}</td>
                   <td className="px-4 py-2 border-b">
@@ -118,16 +142,30 @@ const Historial = () => {
                     }) : String(r.timestamp)}
                   </td>
                   <td className="px-4 py-2 border-b">
-                    {r.imagen_path ? (
-                      <a href={`${API_BASE_URL}/${r.imagen_path}`} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
+                    {r.url_video_frame ? (
+                      <a href={`${API_BASE_URL}/${r.url_video_frame}`} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
+                        Ver Frame
+                      </a>
+                    ) : r.ruta_video_original ? (
+                      <a href={`${API_BASE_URL}/${r.ruta_video_original}`} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
                         Ver Video
                       </a>
+                    ) : r.imagen_path ? (
+                      <a href={`${API_BASE_URL}/${r.imagen_path}`} target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
+                        Ver Imagen
+                      </a>
                     ) : (
-                      <span className="text-gray-500">Sin video</span>
+                      <span className="text-gray-500">Sin archivo</span>
                     )}
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
+                    No se encontraron registros
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

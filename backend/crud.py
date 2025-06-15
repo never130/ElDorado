@@ -108,18 +108,18 @@ def actualizar_registro(
     )
     return result.modified_count > 0
 
-async def get_vagonetas_historial_count(
-    db: Any, # Should be AsyncIOMotorDatabase, but using Any for broader compatibility if get_database() changes
+def get_vagonetas_historial_count(
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None
 ) -> int:
-    query: Dict[str, Any] = {}
+    db = get_database()  # Get database synchronously like other functions
+    query: Dict[str, Any] = {"estado": "activo"}  # Match the query used in get_vagonetas_historial
+    
     if filtro:
-        # Assuming 'filtro' searches in 'numero_detectado' or other relevant text fields
-        # This might need to be adjusted based on how 'filtro' is intended to work (e.g., regex, specific fields)
+        # Search in numero field to match existing data structure
         query["$or"] = [
-            {"numero_detectado": {"$regex": filtro, "$options": "i"}},
+            {"numero": {"$regex": filtro, "$options": "i"}},
             {"evento": {"$regex": filtro, "$options": "i"}},
             {"tunel": {"$regex": filtro, "$options": "i"}}
         ]
@@ -130,9 +130,6 @@ async def get_vagonetas_historial_count(
         query["timestamp"] = {"$gte": fecha_inicio}
     elif fecha_fin:
         query["timestamp"] = {"$lte": fecha_fin}
-    
-    # Add any other fixed query parameters if necessary, e.g., {"estado": "activo"}
-    # query["estado"] = "activo" # Uncomment if you only want active records
 
-    count = await db.vagonetas.count_documents(query)
+    count = db.vagonetas.count_documents(query)  # Synchronous call
     return count

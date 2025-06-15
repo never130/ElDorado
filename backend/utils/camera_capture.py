@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 import asyncio
 from .image_processing import process_image  # Changed from process_frame
 from crud import create_vagoneta_record  # Changed from ..crud
+from schemas import VagonetaCreate
 
 class CameraCapture:
     def __init__(self, camera_id: str, camera_url: str, evento: str, tunel: str):
@@ -63,18 +64,17 @@ class CameraCapture:
         timestamp = datetime.now()
         image_filename = f"{detection['numero']}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
         image_path = f"uploads/{image_filename}"
-        cv2.imwrite(image_path, frame)
-
-        # Crea el registro en MongoDB
-        record = {
-            "numero": detection['numero'],
-            "evento": self.evento,
-            "tunel": self.tunel,
-            "timestamp": timestamp,
-            "modelo_ladrillo": detection.get('modelo_ladrillo', None),
-            "imagen_path": image_path,
-        }
-        await create_vagoneta_record(record)
+        cv2.imwrite(image_path, frame)        # Crea el registro en MongoDB
+        record = VagonetaCreate(
+            numero=detection['numero'],
+            evento=self.evento,
+            tunel=self.tunel,
+            timestamp=timestamp,
+            modelo_ladrillo=detection.get('modelo_ladrillo', None),
+            imagen_path=image_path,
+            origen_deteccion="camera_capture"
+        )
+        create_vagoneta_record(record)
         print(f"Detección guardada: Vagoneta {detection['numero']} en {self.evento}")
 
 # Ejemplo de uso:

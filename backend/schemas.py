@@ -12,7 +12,8 @@ class VagonetaBase(BaseModel):
     evento: str = Field(..., description="Tipo de evento: 'ingreso' o 'egreso'")
     modelo_ladrillo: Optional[str] = Field(None, description="Modelo de ladrillo detectado o ingresado")
     merma: Optional[float] = Field(None, description="Porcentaje de merma/fisuración", ge=0, le=100)
-    estado: Optional[str] = Field(None, description="Estado del registro: activo, anulado, etc")
+    estado: str = Field(default="activo", description="Estado del registro: activo, anulado, etc")
+    origen_deteccion: Optional[str] = Field(None, description="Origen de la detección: video_processing, camera_capture, manual")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Metadatos adicionales (temperatura, humedad, etc)")
 
 class VagonetaCreate(VagonetaBase):
