@@ -701,13 +701,14 @@ async def stream_video_processing(processing_id: str):
 
 @app.get("/historial/", response_model=HistorialResponse)
 async def get_historial_registros(
-    skip: int = 0, limit: int = 100,
+    skip: int = 0, 
+    limit: int = 100,
     sort_by: Optional[str] = Query("timestamp", enum=["timestamp", "numero_detectado", "confianza", "origen_deteccion"]),
-    sort_order: Optional[int] = Query(-1, enum=[-1, 1]), # -1 for descending, 1 for ascending
+    sort_order: Optional[int] = Query(-1, enum=[-1, 1]),
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,
-    db: AsyncIOMotorDatabase = Depends(get_database) # This type hint is standard and correct
+    db = Depends(get_database)
 ):
     if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
         fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)    # Fixed function call to match crud.get_vagonetas_historial signature
@@ -1055,3 +1056,7 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         if cap:
             cap.release()
         print(f"📹 Cámara {camera_id} desconectada")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,7 +1,6 @@
-[
-    {
+[    {
         "camera_id": "video_demo_enteros",
-        "camera_url": "c:\\Users\\NEVER\\OneDrive\\Documentos\\VSCode\\MisProyectos\\app_imagenes\\backend\\models\\numeros_enteros\\yolo_model\\dataset\\CarroNenteros800.mp4",
+        "camera_url": "c:\\Users\\Ever\\VSCode\\ElDorado\\backend\\uploads\\20250614231326256747_CarroNumEnteros_v2.mp4",
         "source_type": "video",
         "evento": "ingreso",
         "tunel": "Demo Túnel - Números Enteros",
