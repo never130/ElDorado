@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
-const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] = useState([]);
+const RealTimeMonitor = () => {
+  const [recentDetections, setRecentDetections] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorError, setMonitorError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
+  const [videoError, setVideoError] = useState('');
   const videoRef = useRef(null);
   const ws = useRef(null);
-
+  const wsReconnectTimeout = useRef(null);
   // Cargar datos iniciales
   const loadInitialData = useCallback(async () => {
     try {
@@ -27,8 +29,7 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
       console.error('Error cargando datos:', error);
       setMonitorError('Error al cargar datos iniciales');
     }
-  }, []);
-  // Iniciar monitoreo
+  }, []);  // Iniciar monitoreo
   const startMonitoring = async () => {
     if (!selectedCamera) {
       setMonitorError('Debe seleccionar una cámara');
@@ -37,25 +38,32 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
 
     try {
       setMonitorError('');
+      setVideoError('');
       
-      // Iniciar video en vivo si es una cámara real
-      const cameraConfig = availableCameras.find(cam => cam.camera_id === selectedCamera);
-      if (cameraConfig && cameraConfig.source_type === 'camera') {
-        await startVideoStream();
-      }
-      
+      // Primero iniciar el monitoreo en el backend
       const response = await axios.post(`http://localhost:8000/monitor/start/${selectedCamera}`);
       if (response.data.status === 'started') {
         setIsMonitoring(true);
+        
+        // Solo mostrar video en frontend si es una cámara real y el backend está funcionando
+        const cameraConfig = availableCameras.find(cam => cam.camera_id === selectedCamera);
+        if (cameraConfig && cameraConfig.source_type === 'camera') {
+          // Esperar un momento para que el backend inicie la cámara
+          setTimeout(async () => {
+            await startVideoStream();
+          }, 1000);
+        }
       }
     } catch (error) {
+      console.error('Error starting monitor:', error);
       setMonitorError(error.response?.data?.detail || 'Error al iniciar el monitoreo');
     }
   };
-
   // Detener monitoreo
   const stopMonitoring = async () => {
     try {
+      setVideoError('');
+      
       // Detener video stream
       stopVideoStream();
       
@@ -66,30 +74,7 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
     } catch (error) {
       setMonitorError(error.response?.data?.detail || 'Error al detener el monitoreo');
     }
-  };
-
-  // Iniciar stream de video
-  const startVideoStream = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 960 },
-          facingMode: 'environment' // Usar cámara trasera si está disponible
-        },
-        audio: false 
-      });
-      
-      setVideoStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setMonitorError('No se pudo acceder a la cámara. Verifica los permisos.');
-    }
-  };
-  // Detener stream de video
+  };// Detener stream de video
   const stopVideoStream = useCallback(() => {
     if (videoStream) {
       videoStream.getTracks().forEach(track => track.stop());
@@ -100,38 +85,119 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
     }
   }, [videoStream]);
 
-  useEffect(() => {
+  // Iniciar stream de video
+  const startVideoStream = useCallback(async () => {
+    try {
+      console.log('Solicitando acceso a la cámara...');
+      
+      // Detener stream anterior si existe
+      stopVideoStream();
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 960 }
+        },
+        audio: false 
+      });
+      
+      console.log('Cámara accedida exitosamente');
+      setVideoStream(stream);
+      setVideoError('');
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play().catch(e => console.error('Error playing video:', e));
+        };
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      let errorMessage = 'No se pudo acceder a la cámara.';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Permisos de cámara denegados. Por favor, permite el acceso a la cámara.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No se encontró ninguna cámara en el sistema.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'La cámara está siendo usada por otra aplicación.';
+      }
+      
+      setVideoError(errorMessage);
+    }
+  }, [stopVideoStream]);  useEffect(() => {
     loadInitialData();
 
     // WebSocket para recibir detecciones en tiempo real
     const wsUrl = 'ws://localhost:8000/ws/detections';
+    let mounted = true;
     
     const connectWebSocket = () => {
+      // Evitar múltiples conexiones
+      if (ws.current && (ws.current.readyState === WebSocket.CONNECTING || ws.current.readyState === WebSocket.OPEN)) {
+        return;
+      }
+
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        setIsConnected(true);
-        console.log('WebSocket conectado');
+        if (mounted) {
+          setIsConnected(true);
+          console.log('WebSocket conectado');
+        }
       };
 
       ws.current.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'monitor_detection' || message.type === 'new_detection') {
-          setRecentDetections(prev => [message.data, ...prev].slice(0, 10));
+        if (!mounted) return;
+        
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'monitor_detection' || message.type === 'new_detection') {
+            setRecentDetections(prev => [message.data, ...prev].slice(0, 10));
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
         }
       };
 
       ws.current.onclose = () => {
-        setIsConnected(false);
-        setTimeout(connectWebSocket, 5000);
+        if (mounted) {
+          setIsConnected(false);
+          console.log('WebSocket desconectado');
+          
+          // Reconectar después de un delay si el componente sigue montado
+          if (wsReconnectTimeout.current) {
+            clearTimeout(wsReconnectTimeout.current);
+          }
+          
+          wsReconnectTimeout.current = setTimeout(() => {
+            if (mounted && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
+              console.log('Reintentando conexión WebSocket...');
+              connectWebSocket();
+            }
+          }, 3000);
+        }
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
       };
     };
 
-    connectWebSocket();    return () => {
+    connectWebSocket();
+
+    return () => {
+      mounted = false;
+      
+      if (wsReconnectTimeout.current) {
+        clearTimeout(wsReconnectTimeout.current);
+      }
+      
       if (ws.current) {
         ws.current.close();
+        ws.current = null;
       }
-      // Cleanup video stream
+      
       stopVideoStream();
     };
   }, [loadInitialData, stopVideoStream]);
@@ -199,14 +265,18 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
             </div>
           </div>
         </div>
-        
-        {monitorError && (
+          {monitorError && (
           <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">
             {monitorError}
-          </div>        )}
-      </div>
-
-      {/* Video en Vivo */}
+          </div>
+        )}
+        
+        {videoError && (
+          <div className="mt-4 p-3 bg-yellow-100 text-yellow-700 rounded-md">
+            {videoError}
+          </div>
+        )}
+      </div>      {/* Video en Vivo */}
       {isMonitoring && selectedCamera && (
         <div className="bg-white rounded-lg p-6 mb-6 shadow-sm">
           <h2 className="text-xl font-bold text-cyan-800 mb-4">
@@ -214,22 +284,30 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
           </h2>
           
           <div className="flex justify-center">
-            <div className="relative bg-black rounded-lg overflow-hidden max-w-2xl w-full">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-auto max-h-96 object-contain"
-                style={{ aspectRatio: '4/3' }}
-              />
-              
-              {!videoStream && isMonitoring && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-75">
+            <div className="relative bg-black rounded-lg overflow-hidden max-w-2xl w-full">              {videoStream ? (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-auto max-h-96 object-contain"
+                  style={{ aspectRatio: '4/3' }}
+                />
+              ) : videoError ? (
+                <div className="w-full h-64 flex items-center justify-center bg-red-900">
+                  <div className="text-center text-white">
+                    <div className="text-4xl mb-2">⚠️</div>
+                    <div className="mb-2">Error de Cámara</div>
+                    <div className="text-sm">{videoError}</div>
+                    <div className="text-xs mt-2">El análisis IA continúa en segundo plano</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full h-64 flex items-center justify-center bg-gray-800">
                   <div className="text-center text-white">
                     <div className="text-4xl mb-2">📹</div>
-                    <div>Procesando video de la cámara...</div>
-                    <div className="text-sm mt-1">El análisis IA está activo en segundo plano</div>
+                    <div>Iniciando cámara...</div>
+                    <div className="text-sm mt-1">El análisis IA está procesando en segundo plano</div>
                   </div>
                 </div>
               )}
@@ -247,15 +325,34 @@ const RealTimeMonitor = () => {  const [recentDetections, setRecentDetections] =
               </div>
               
               {/* Overlay de resolución */}
-              <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
-                960x1280
-              </div>
+              {videoStream && (
+                <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs">
+                  AI: 960x1280
+                </div>
+              )}
             </div>
           </div>
-          
-          <div className="mt-4 text-center text-sm text-gray-600">
-            💡 La IA está analizando cada frame en busca de números. Muestra un número a la cámara para ver las detecciones.
+            <div className="mt-4 text-center text-sm text-gray-600">
+            💡 <strong>Instrucciones:</strong> Muestra un número bien visible a la cámara. 
+            La IA analizará cada frame y guardará las detecciones automáticamente.
           </div>
+          
+          {videoError && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={startVideoStream}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                🔄 Reintentar Video
+              </button>
+            </div>
+          )}
+          
+          {!videoStream && !videoError && isMonitoring && (
+            <div className="mt-2 text-center text-yellow-600 text-sm">
+              ⚠️ Video frontend desactivado - El backend está procesando la cámara directamente
+            </div>
+          )}
         </div>
       )}
 
