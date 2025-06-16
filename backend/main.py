@@ -591,9 +591,8 @@ async def stream_video_processing(processing_id: str):
                                     tunel=task_info.get("tunel"),
                                     evento=task_info.get("evento"),
                                     modelo_ladrillo=None,
-                                    merma=parse_merma(task_info.get("merma_str")),
-                                    metadata={
-                                        **task_info.get("metadata", {}),
+                                    merma=parse_merma(task_info.get("merma_str")),                                    metadata={
+                                        **(task_info.get("metadata") or {}),
                                         "frame_number": frame_num,
                                         "video_source": Path(task_info['video_path']).name
                                     },
@@ -645,7 +644,7 @@ async def stream_video_processing(processing_id: str):
                                 evento=task_info.get("evento"),
                                 modelo_ladrillo=None,
                                 merma=parse_merma(task_info.get("merma_str")),
-                                metadata=task_info.get("metadata"),
+                                metadata=task_info.get("metadata") or {},
                                 confianza=confianza_val,
                                 origen_deteccion="video_processing"
                             )
