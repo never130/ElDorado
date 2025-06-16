@@ -75,7 +75,7 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
         yield {"type": "error", "stage": "initialization", "message": f"Error al abrir el video: {video_path}"}
         return
 
-    detections = {}
+    detections = {}  # Para agrupar por número: {numero: [lista de detecciones]}
     frame_count = 0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     yield {"type": "progress", "stage": "setup", "message": "Video abierto y listo para procesar.", "total_frames": total_frames, "current_frame": 0}
@@ -117,8 +117,22 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
                         "numero": numero_detectado, 
                         "confianza": confianza_float 
                     }
-                    if numero_detectado not in detections or confianza_float > detections[numero_detectado]:
-                        detections[numero_detectado] = confianza_float
+                    
+                    # Guardar TODAS las detecciones significativas (no solo la mejor)
+                    if confianza_float >= 0.5:  # Solo detecciones con confianza >= 50%
+                        if numero_detectado not in detections:
+                            detections[numero_detectado] = []
+                        
+                        # Guardar frame como imagen para esta detección
+                        frame_filename = f"frame_{frame_count}_{numero_detectado}_{confianza_float:.3f}.jpg"
+                        frame_path = upload_dir / frame_filename
+                        cv2.imwrite(str(frame_path), frame)
+                        
+                        detections[numero_detectado].append({
+                            'confianza': confianza_float,
+                            'frame': frame_count,
+                            'imagen_path': f"uploads/{frame_filename}"
+                        })
             except Exception as e_detect:
                 yield {"type": "warning", "stage": "frame_processing", "message": f"Error detectando en frame {frame_count}: {str(e_detect)}"}
     except Exception as e_video:
@@ -132,7 +146,10 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
     if not detections:
         yield {"type": "final_result", "stage": "completion", "data": None, "message": "No se detectaron números en el video."}
     else:
-        final_detections_serializable = {k: float(v) for k, v in detections.items()}
+        # Convertir a formato que mantenga todas las detecciones
+        final_detections_serializable = {}
+        for numero, lista_detecciones in detections.items():
+            final_detections_serializable[numero] = lista_detecciones
         yield {"type": "final_result", "stage": "completion", "data": final_detections_serializable, "message": "Detecciones finales recopiladas."}
 
 def parse_merma(merma_str: Optional[str]) -> Optional[float]:
@@ -539,65 +556,110 @@ async def stream_video_processing(processing_id: str):
                     processing_error_occurred = True
                     error_message_detail = update.get("message", error_message_detail)
             
-            if not processing_error_occurred and final_detection_data: 
-                best_numero_from_video = None
-                max_confianza_from_video = -1.0 
-                
+            if not processing_error_occurred and final_detection_data:
                 if isinstance(final_detection_data, dict) and final_detection_data:
-                    for numero_str, confianza_val_float in final_detection_data.items():
-                        if confianza_val_float > max_confianza_from_video:
-                            max_confianza_from_video = confianza_val_float
-                            best_numero_from_video = numero_str
-                
-                actual_confidence_to_save = max_confianza_from_video if max_confianza_from_video != -1.0 else None
-
-                if actual_confidence_to_save is not None:
-                    if actual_confidence_to_save > 1.0:
-                        print(f"Warning (VID:{processing_id}): Confianza {actual_confidence_to_save} > 1.0 para N°{best_numero_from_video}. Capada a 1.0.")
-                        actual_confidence_to_save = 1.0
-                    elif actual_confidence_to_save < 0.0: # Should ideally not happen with model outputs
-                        print(f"Warning (VID:{processing_id}): Confianza {actual_confidence_to_save} < 0.0 para N°{best_numero_from_video}. Capada a 0.0.")
-                        actual_confidence_to_save = 0.0
-
-
-                if best_numero_from_video:
-                    record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
-                    if not isinstance(record_timestamp, datetime): 
-                        record_timestamp = datetime.now(timezone.utc) # Fallback
-                    if record_timestamp.tzinfo is None: 
-                        record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
-
-                    vagoneta_data = VagonetaCreate(
-                        numero=str(best_numero_from_video),
-                        imagen_path=f"uploads/{Path(task_info['video_path']).name}", # Uses the final saved video path
-                        timestamp=record_timestamp,
-                        tunel=task_info.get("tunel"),
-                        evento=task_info.get("evento"),
-                        modelo_ladrillo=None, # Modelo ladrillo no se detecta en videos por ahora
-                        merma=parse_merma(task_info.get("merma_str")),
-                        metadata=task_info.get("metadata"),
-                        confianza=actual_confidence_to_save,
-                        origen_deteccion="video_processing"
-                    )
+                    # Procesar TODAS las detecciones (no solo la mejor)
+                    registros_creados = []
                     
-                    record_id = crud.create_vagoneta_record(vagoneta_data)
-                    db_record_id_created = record_id # Store for logging/confirmation
+                    for numero_str, lista_detecciones in final_detection_data.items():
+                        if isinstance(lista_detecciones, list):
+                            # Nueva estructura: lista de detecciones por número
+                            for deteccion in lista_detecciones:
+                                confianza_val = deteccion.get('confianza', 0.0)
+                                frame_num = deteccion.get('frame', 0)
+                                imagen_path = deteccion.get('imagen_path', f"uploads/{Path(task_info['video_path']).name}")
+                                
+                                # Validar confianza
+                                if confianza_val > 1.0:
+                                    print(f"Warning (VID:{processing_id}): Confianza {confianza_val} > 1.0 para N°{numero_str} frame {frame_num}. Capada a 1.0.")
+                                    confianza_val = 1.0
+                                elif confianza_val < 0.0:
+                                    print(f"Warning (VID:{processing_id}): Confianza {confianza_val} < 0.0 para N°{numero_str} frame {frame_num}. Capada a 0.0.")
+                                    confianza_val = 0.0
 
-                    db_record_dict = vagoneta_data.dict()
-                    db_record_dict["_id"] = str(record_id)
-                    db_record_dict["id"] = str(record_id) # Ensure 'id' field for frontend if needed
-                    if isinstance(db_record_dict.get("timestamp"), datetime):
-                        db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+                                # Crear registro individual
+                                record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                                if not isinstance(record_timestamp, datetime): 
+                                    record_timestamp = datetime.now(timezone.utc)
+                                if record_timestamp.tzinfo is None: 
+                                    record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
 
-                    yield f"data: {json.dumps({'type': 'db_record_created', 'data': db_record_dict})}\n\n"
-                    print(f"✅ Registro creado para video {task_info['original_filename']} (Task:{processing_id}), N°: {best_numero_from_video}, Conf: {actual_confidence_to_save}, DB_ID: {record_id}")
-                    
-                    # Broadcast via WebSocket
-                    broadcast_message = {"type": "new_detection", "data": db_record_dict}
-                    asyncio.create_task(manager.broadcast_json(broadcast_message))
-                    print(f"WebSocket broadcast initiated for video record {record_id}")
+                                vagoneta_data = VagonetaCreate(
+                                    numero=str(numero_str),
+                                    imagen_path=imagen_path,
+                                    timestamp=record_timestamp,
+                                    tunel=task_info.get("tunel"),
+                                    evento=task_info.get("evento"),
+                                    modelo_ladrillo=None,
+                                    merma=parse_merma(task_info.get("merma_str")),
+                                    metadata={
+                                        **task_info.get("metadata", {}),
+                                        "frame_number": frame_num,
+                                        "video_source": Path(task_info['video_path']).name
+                                    },
+                                    confianza=confianza_val,
+                                    origen_deteccion="video_processing"
+                                )
+                                
+                                record_id = crud.create_vagoneta_record(vagoneta_data)
+                                registros_creados.append({
+                                    "id": str(record_id),
+                                    "numero": numero_str,
+                                    "confianza": confianza_val,
+                                    "frame": frame_num
+                                })
 
-                else: # No best_numero_from_video found, even if final_detection_data existed
+                                db_record_dict = vagoneta_data.dict()
+                                db_record_dict["_id"] = str(record_id)
+                                db_record_dict["id"] = str(record_id)
+                                if isinstance(db_record_dict.get("timestamp"), datetime):
+                                    db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+
+                                yield f"data: {json.dumps({'type': 'db_record_created', 'data': db_record_dict})}\n\n"
+                                print(f"✅ Registro creado para video {task_info['original_filename']} (Task:{processing_id}), N°: {numero_str}, Frame: {frame_num}, Conf: {confianza_val:.3f}, DB_ID: {record_id}")
+                                
+                                # Broadcast via WebSocket
+                                broadcast_message = {"type": "new_detection", "data": db_record_dict}
+                                asyncio.create_task(manager.broadcast_json(broadcast_message))
+                        
+                        else:
+                            # Estructura antigua: compatibilidad hacia atrás
+                            confianza_val = float(lista_detecciones) if lista_detecciones else 0.0
+                            
+                            if confianza_val > 1.0:
+                                confianza_val = 1.0
+                            elif confianza_val < 0.0:
+                                confianza_val = 0.0
+
+                            record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                            if not isinstance(record_timestamp, datetime): 
+                                record_timestamp = datetime.now(timezone.utc)
+                            if record_timestamp.tzinfo is None: 
+                                record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
+
+                            vagoneta_data = VagonetaCreate(
+                                numero=str(numero_str),
+                                imagen_path=f"uploads/{Path(task_info['video_path']).name}",
+                                timestamp=record_timestamp,
+                                tunel=task_info.get("tunel"),
+                                evento=task_info.get("evento"),
+                                modelo_ladrillo=None,
+                                merma=parse_merma(task_info.get("merma_str")),
+                                metadata=task_info.get("metadata"),
+                                confianza=confianza_val,
+                                origen_deteccion="video_processing"
+                            )
+                            
+                            record_id = crud.create_vagoneta_record(vagoneta_data)
+                            registros_creados.append({
+                                "id": str(record_id),
+                                "numero": numero_str,
+                                "confianza": confianza_val
+                            })
+
+                    print(f"📊 Total de {len(registros_creados)} registros creados para video {task_info['original_filename']}")
+                    yield f"data: {json.dumps({'type': 'processing_complete', 'total_records': len(registros_creados), 'records': registros_creados})}\n\n"
+                else:
                     yield f"data: {json.dumps({'type': 'status', 'stage': 'completion', 'message': 'Video procesado, pero no se identificó un número de vagoneta claro.'})}\n\n"
                     print(f"ℹ️ Video {task_info['original_filename']} (Task:{processing_id}) procesado. No se identificó un número principal. Detecciones: {final_detection_data}")
                     # processing_error_occurred remains False, but no record is created.
@@ -698,9 +760,8 @@ async def get_historial_registros(
         if merma_val is not None:
             doc_data['merma'] = str(merma_val)
         else:
-            doc_data['merma'] = None
-
-        # 9. Optional fields (defaults to None if not present, Pydantic handles Optional types)
+            doc_data['merma'] = None        # 9. Optional fields (defaults to None if not present, Pydantic handles Optional types)
+        doc_data['imagen_path'] = doc_data.get('imagen_path')
         doc_data['url_video_frame'] = doc_data.get('url_video_frame')
         doc_data['ruta_video_original'] = doc_data.get('ruta_video_original')
 

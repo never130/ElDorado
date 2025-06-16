@@ -33,6 +33,7 @@ class RegistroHistorialDisplay(BaseModel):
     evento: Optional[str] = None
     tunel: Optional[str] = None
     merma: Optional[str] = None # Assuming merma can be a string like "10%" or a numeric value. Adjust if it's strictly numeric.
+    imagen_path: Optional[str] = None  # Ruta de la imagen
     url_video_frame: Optional[str] = None
     ruta_video_original: Optional[str] = None
 
