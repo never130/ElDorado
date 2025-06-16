@@ -194,6 +194,9 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 TEMP_CHUNK_DIR = UPLOAD_DIR / "temp_chunks"
 TEMP_CHUNK_DIR.mkdir(exist_ok=True)
 
+# Variables globales para monitoreo en vivo
+monitor_tasks = {}  # Diccionario para manejar tareas de monitoreo activas
+
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads") # Ensure directory is string
 
 @app.post("/upload-chunk/")
@@ -847,6 +850,208 @@ async def get_model_info():
     #     return processor.get_model_details()
     return {"message": "Información del modelo no disponible en esta configuración."}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+# Endpoints para Monitor en Vivo
+
+@app.get("/cameras/list")
+async def get_cameras_list():
+    """Obtener lista de cámaras disponibles para el monitor en vivo"""
+    try:
+        cameras_info = []
+        for camera in CAMERAS_CONFIG:
+            cameras_info.append({
+                "camera_id": camera["camera_id"],
+                "tunel": camera.get("tunel", "Sin nombre"),
+                "evento": camera.get("evento", "desconocido"),
+                "source_type": camera.get("source_type", "camera"),
+                "demo_mode": camera.get("demo_mode", False)
+            })
+        return {"cameras": cameras_info}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo lista de cámaras: {str(e)}")
+
+@app.post("/monitor/start/{camera_id}")
+async def start_camera_monitoring(camera_id: str):
+    """Iniciar monitoreo en vivo de una cámara específica"""
+    global monitor_tasks
+    
+    # Buscar la configuración de la cámara
+    camera_config = None
+    for cam in CAMERAS_CONFIG:
+        if cam["camera_id"] == camera_id:
+            camera_config = cam
+            break
+    
+    if not camera_config:
+        raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
+    
+    # Verificar si ya está en ejecución
+    if camera_id in monitor_tasks:
+        raise HTTPException(status_code=400, detail=f"El monitoreo de la cámara {camera_id} ya está activo")
+    
+    # Crear tarea de monitoreo
+    task = asyncio.create_task(monitor_camera_live(camera_id, camera_config))
+    monitor_tasks[camera_id] = task
+    
+    print(f"INFO: Monitoreo iniciado para cámara {camera_id}")
+    return {"message": f"Monitoreo iniciado para cámara {camera_id}", "camera_id": camera_id}
+
+@app.post("/monitor/stop/{camera_id}")
+async def stop_camera_monitoring(camera_id: str):
+    """Detener monitoreo en vivo de una cámara específica"""
+    global monitor_tasks
+    
+    if camera_id not in monitor_tasks:
+        raise HTTPException(status_code=404, detail=f"No hay monitoreo activo para la cámara {camera_id}")
+    
+    # Cancelar la tarea
+    monitor_tasks[camera_id].cancel()
+    del monitor_tasks[camera_id]
+    
+    print(f"INFO: Monitoreo detenido para cámara {camera_id}")
+    return {"message": f"Monitoreo detenido para cámara {camera_id}", "camera_id": camera_id}
+
+@app.get("/monitor/status")
+async def get_monitor_status():
+    """Obtener estado actual del monitoreo"""
+    global monitor_tasks
+    
+    active_monitors = []
+    for camera_id, task in monitor_tasks.items():
+        if not task.done():
+            active_monitors.append({
+                "camera_id": camera_id,
+                "status": "running"
+            })
+    
+    return {
+        "active_monitors": active_monitors,
+        "total_active": len(active_monitors)
+    }
+
+async def monitor_camera_live(camera_id: str, camera_config: dict):
+    """Función para monitorear una cámara en tiempo real"""
+    print(f"🎥 Iniciando monitoreo en vivo para cámara {camera_id}")
+    
+    cap = None
+    try:
+        # Configurar la captura de video
+        camera_url = camera_config["camera_url"]
+        
+        if camera_config.get("source_type") == "video":
+            # Para archivos de video
+            cap = cv2.VideoCapture(str(camera_url))
+        else:
+            # Para cámaras web (índice numérico)
+            cap = cv2.VideoCapture(int(camera_url))
+        
+        if not cap.isOpened():
+            print(f"❌ Error: No se pudo abrir la cámara {camera_id}")
+            return
+        
+        print(f"✅ Cámara {camera_id} conectada exitosamente")
+        
+        # Configuración de detección
+        frame_count = 0
+        detection_interval = 30  # Procesar cada N frames para optimizar rendimiento
+        last_detection_time = {}  # Para cooldown por número
+        cooldown_seconds = camera_config.get("detection_cooldown", 5)
+        
+        while True:
+            ret, frame = cap.read()
+            
+            if not ret:
+                if camera_config.get("loop_video", False):
+                    # Reiniciar video si está en modo loop
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    continue
+                else:
+                    print(f"📹 Fin del video para cámara {camera_id}")
+                    break
+            
+            frame_count += 1
+            
+            # Procesar solo cada N frames para optimizar
+            if frame_count % detection_interval != 0:
+                continue
+            
+            try:
+                # Detectar números en el frame
+                _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+                
+                if numero_detectado and confianza_placa is not None:
+                    confianza_float = float(confianza_placa) if confianza_placa else 0.0
+                    
+                    # Aplicar filtro de confianza mínima
+                    if confianza_float >= 0.6:  # 60% de confianza mínima para tiempo real
+                        current_time = datetime.now()
+                        
+                        # Verificar cooldown para evitar duplicados
+                        if numero_detectado in last_detection_time:
+                            time_diff = (current_time - last_detection_time[numero_detectado]).total_seconds()
+                            if time_diff < cooldown_seconds:
+                                continue  # Skip esta detección por cooldown
+                        
+                        # Actualizar tiempo de última detección
+                        last_detection_time[numero_detectado] = current_time
+                        
+                        # Guardar frame como imagen
+                        timestamp_str = current_time.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Microsegundos a milisegundos
+                        frame_filename = f"live_{camera_id}_{timestamp_str}_{numero_detectado}_{confianza_float:.3f}.jpg"
+                        frame_path = UPLOAD_DIR / frame_filename
+                        cv2.imwrite(str(frame_path), frame)
+                        
+                        # Crear registro en la base de datos
+                        vagoneta_data = VagonetaCreate(
+                            numero=str(numero_detectado),
+                            imagen_path=f"uploads/{frame_filename}",
+                            timestamp=current_time.replace(tzinfo=timezone.utc),
+                            tunel=camera_config.get("tunel"),
+                            evento=camera_config.get("evento", "ingreso"),
+                            modelo_ladrillo=None,
+                            merma=None,
+                            metadata={
+                                "camera_id": camera_id,
+                                "frame_number": frame_count,
+                                "detection_source": "live_monitoring"
+                            },
+                            confianza=min(confianza_float, 1.0),  # Asegurar que no sea > 1.0
+                            origen_deteccion="camera_capture"
+                        )
+                        
+                        record_id = crud.create_vagoneta_record(vagoneta_data)
+                        
+                        # Preparar datos para broadcast
+                        db_record_dict = vagoneta_data.dict()
+                        db_record_dict["_id"] = str(record_id)
+                        db_record_dict["id"] = str(record_id)
+                        if isinstance(db_record_dict.get("timestamp"), datetime):
+                            db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+                        
+                        # Broadcast via WebSocket
+                        broadcast_message = {
+                            "type": "new_detection", 
+                            "data": db_record_dict,
+                            "source": "live_monitoring",
+                            "camera_id": camera_id
+                        }
+                        asyncio.create_task(manager.broadcast_json(broadcast_message))
+                        
+                        print(f"🎯 Detección en vivo: Cámara {camera_id}, N°{numero_detectado}, Conf: {confianza_float:.3f}, DB_ID: {record_id}")
+                        
+            except Exception as e_detect:
+                print(f"⚠️ Error detectando en frame de cámara {camera_id}: {e_detect}")
+                continue
+                
+            # Pequeña pausa para no saturar el CPU
+            await asyncio.sleep(0.1)
+    
+    except asyncio.CancelledError:
+        print(f"🛑 Monitoreo de cámara {camera_id} cancelado")
+    except Exception as e:
+        print(f"❌ Error en monitoreo de cámara {camera_id}: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        if cap:
+            cap.release()
+        print(f"📹 Cámara {camera_id} desconectada")
