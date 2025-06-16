@@ -40,18 +40,29 @@ const RealTimeMonitor = () => {
       setMonitorError('');
       setVideoError('');
       
+      console.log('Iniciando monitoreo para cámara:', selectedCamera);
+      
       // Primero iniciar el monitoreo en el backend
       const response = await axios.post(`http://localhost:8000/monitor/start/${selectedCamera}`);
+      console.log('Respuesta del backend:', response.data);
+      
       if (response.data.status === 'started') {
         setIsMonitoring(true);
+        console.log('Monitoreo iniciado, isMonitoring:', true);
         
         // Solo mostrar video en frontend si es una cámara real y el backend está funcionando
         const cameraConfig = availableCameras.find(cam => cam.camera_id === selectedCamera);
+        console.log('Configuración de cámara encontrada:', cameraConfig);
+        
         if (cameraConfig && cameraConfig.source_type === 'camera') {
+          console.log('Es una cámara real, iniciando video stream en 1 segundo...');
           // Esperar un momento para que el backend inicie la cámara
           setTimeout(async () => {
+            console.log('Llamando a startVideoStream...');
             await startVideoStream();
           }, 1000);
+        } else {
+          console.log('No es una cámara real o no se encontró configuración');
         }
       }
     } catch (error) {
@@ -84,15 +95,16 @@ const RealTimeMonitor = () => {
       videoRef.current.srcObject = null;
     }
   }, [videoStream]);
-
   // Iniciar stream de video
   const startVideoStream = useCallback(async () => {
     try {
-      console.log('Solicitando acceso a la cámara...');
+      console.log('🎥 Iniciando startVideoStream...');
+      console.log('Estado actual - videoStream:', !!videoStream, 'videoError:', videoError);
       
       // Detener stream anterior si existe
       stopVideoStream();
       
+      console.log('Solicitando acceso a la cámara con getUserMedia...');
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           width: { ideal: 640, max: 1280 },
@@ -101,18 +113,24 @@ const RealTimeMonitor = () => {
         audio: false 
       });
       
-      console.log('Cámara accedida exitosamente');
+      console.log('✅ Cámara accedida exitosamente, stream:', stream);
+      console.log('Video tracks:', stream.getVideoTracks().length);
+      
       setVideoStream(stream);
       setVideoError('');
       
       if (videoRef.current) {
+        console.log('Asignando stream al elemento video...');
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
+          console.log('Video metadata cargada, intentando reproducir...');
           videoRef.current.play().catch(e => console.error('Error playing video:', e));
         };
+      } else {
+        console.error('videoRef.current es null!');
       }
     } catch (error) {
-      console.error('Error accessing camera:', error);
+      console.error('❌ Error accessing camera:', error);
       let errorMessage = 'No se pudo acceder a la cámara.';
       
       if (error.name === 'NotAllowedError') {
@@ -123,27 +141,39 @@ const RealTimeMonitor = () => {
         errorMessage = 'La cámara está siendo usada por otra aplicación.';
       }
       
+      console.log('Setting videoError:', errorMessage);
       setVideoError(errorMessage);
     }
-  }, [stopVideoStream]);  useEffect(() => {
+  }, [stopVideoStream, videoError, videoStream]);
+
+  useEffect(() => {
     loadInitialData();
 
     // WebSocket para recibir detecciones en tiempo real
     const wsUrl = 'ws://localhost:8000/ws/detections';
     let mounted = true;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
     
     const connectWebSocket = () => {
-      // Evitar múltiples conexiones
+      // Evitar múltiples conexiones y limitar intentos
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        console.log('Máximo de intentos de reconexión alcanzado');
+        return;
+      }
+      
       if (ws.current && (ws.current.readyState === WebSocket.CONNECTING || ws.current.readyState === WebSocket.OPEN)) {
         return;
       }
 
+      console.log(`Intentando conectar WebSocket (intento ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
         if (mounted) {
           setIsConnected(true);
-          console.log('WebSocket conectado');
+          reconnectAttempts = 0; // Reset counter on successful connection
+          console.log('WebSocket conectado exitosamente');
         }
       };
 
@@ -160,27 +190,31 @@ const RealTimeMonitor = () => {
         }
       };
 
-      ws.current.onclose = () => {
+      ws.current.onclose = (event) => {
         if (mounted) {
           setIsConnected(false);
-          console.log('WebSocket desconectado');
+          console.log('WebSocket desconectado:', event.code, event.reason);
           
-          // Reconectar después de un delay si el componente sigue montado
-          if (wsReconnectTimeout.current) {
-            clearTimeout(wsReconnectTimeout.current);
-          }
-          
-          wsReconnectTimeout.current = setTimeout(() => {
-            if (mounted && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
-              console.log('Reintentando conexión WebSocket...');
-              connectWebSocket();
+          // Solo reconectar si no fue un cierre intencional y no hemos excedido los intentos
+          if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            
+            if (wsReconnectTimeout.current) {
+              clearTimeout(wsReconnectTimeout.current);
             }
-          }, 3000);
+            
+            wsReconnectTimeout.current = setTimeout(() => {
+              if (mounted && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
+                connectWebSocket();
+              }
+            }, 5000); // Aumentar delay a 5 segundos
+          }
         }
       };
 
       ws.current.onerror = (error) => {
         console.error('WebSocket error:', error);
+        // No reconectar inmediatamente en error, esperar al onclose
       };
     };
 
@@ -194,7 +228,7 @@ const RealTimeMonitor = () => {
       }
       
       if (ws.current) {
-        ws.current.close();
+        ws.current.close(1000, 'Component unmounting'); // Cierre intencional
         ws.current = null;
       }
       
@@ -284,7 +318,8 @@ const RealTimeMonitor = () => {
           </h2>
           
           <div className="flex justify-center">
-            <div className="relative bg-black rounded-lg overflow-hidden max-w-2xl w-full">              {videoStream ? (
+            <div className="relative bg-black rounded-lg overflow-hidden max-w-2xl w-full">
+              {videoStream ? (
                 <video
                   ref={videoRef}
                   autoPlay
@@ -332,7 +367,8 @@ const RealTimeMonitor = () => {
               )}
             </div>
           </div>
-            <div className="mt-4 text-center text-sm text-gray-600">
+          
+          <div className="mt-4 text-center text-sm text-gray-600">
             💡 <strong>Instrucciones:</strong> Muestra un número bien visible a la cámara. 
             La IA analizará cada frame y guardará las detecciones automáticamente.
           </div>
