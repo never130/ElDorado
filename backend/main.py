@@ -884,8 +884,7 @@ async def start_camera_monitoring(camera_id: str):
     
     if not camera_config:
         raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
-    
-    # Verificar si ya está en ejecución
+      # Verificar si ya está en ejecución
     if camera_id in monitor_tasks:
         raise HTTPException(status_code=400, detail=f"El monitoreo de la cámara {camera_id} ya está activo")
     
@@ -894,7 +893,11 @@ async def start_camera_monitoring(camera_id: str):
     monitor_tasks[camera_id] = task
     
     print(f"INFO: Monitoreo iniciado para cámara {camera_id}")
-    return {"message": f"Monitoreo iniciado para cámara {camera_id}", "camera_id": camera_id}
+    return {
+        "status": "started",
+        "message": f"Monitoreo iniciado para cámara {camera_id}", 
+        "camera_id": camera_id
+    }
 
 @app.post("/monitor/stop/{camera_id}")
 async def stop_camera_monitoring(camera_id: str):
@@ -909,7 +912,11 @@ async def stop_camera_monitoring(camera_id: str):
     del monitor_tasks[camera_id]
     
     print(f"INFO: Monitoreo detenido para cámara {camera_id}")
-    return {"message": f"Monitoreo detenido para cámara {camera_id}", "camera_id": camera_id}
+    return {
+        "status": "stopped",
+        "message": f"Monitoreo detenido para cámara {camera_id}", 
+        "camera_id": camera_id
+    }
 
 @app.get("/monitor/status")
 async def get_monitor_status():
@@ -938,18 +945,60 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         # Configurar la captura de video
         camera_url = camera_config["camera_url"]
         
+        print(f"🔄 Intentando conectar a cámara {camera_id} (URL: {camera_url})")
+        
         if camera_config.get("source_type") == "video":
             # Para archivos de video
             cap = cv2.VideoCapture(str(camera_url))
         else:
-            # Para cámaras web (índice numérico)
-            cap = cv2.VideoCapture(int(camera_url))
+            # Para cámaras web (índice numérico) con optimizaciones agresivas
+            cap = cv2.VideoCapture(int(camera_url), cv2.CAP_DSHOW)  # DirectShow para Windows es más rápido
+            
+            # Configurar timeouts muy estrictos para conexión rápida
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)  # Reducido a 1.5 segundos
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 500)    # Reducido a 0.5 segundos
+            
+            # Configurar propiedades básicas para acelerar
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_FPS, 15)  # Reducido FPS para menos carga
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Buffer mínimo para reducir latencia
         
+        # Verificación rápida de conexión
         if not cap.isOpened():
-            print(f"❌ Error: No se pudo abrir la cámara {camera_id}")
+            print(f"❌ Error: No se pudo abrir la cámara {camera_id} en el primer intento")
+            # Intentar sin DirectShow como fallback
+            if camera_config.get("source_type") != "video":
+                print(f"🔄 Reintentando cámara {camera_id} sin DirectShow...")
+                cap.release()
+                cap = cv2.VideoCapture(int(camera_url))
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000)
+                
+                if not cap.isOpened():
+                    print(f"❌ Error: Cámara {camera_id} no disponible después de reintentos")
+                    return
+        
+        # Verificar que puede leer frames con timeout
+        print(f"🔍 Verificando lectura de frames para cámara {camera_id}...")
+        
+        # Intentar leer frame con múltiples intentos rápidos
+        frame_read_attempts = 0
+        max_attempts = 3
+        ret, test_frame = False, None
+        
+        while frame_read_attempts < max_attempts and not ret:
+            ret, test_frame = cap.read()
+            frame_read_attempts += 1
+            if not ret:
+                print(f"⚠️ Intento {frame_read_attempts}/{max_attempts} de lectura falló para cámara {camera_id}")
+                await asyncio.sleep(0.1)  # Breve pausa entre intentos
+        
+        if not ret or test_frame is None:
+            print(f"❌ Error: Cámara {camera_id} no puede leer frames después de {max_attempts} intentos")
             return
         
-        print(f"✅ Cámara {camera_id} conectada exitosamente")
+        print(f"✅ Cámara {camera_id} conectada exitosamente (Resolución: {test_frame.shape[1]}x{test_frame.shape[0]})")
         
         # Configuración de detección
         frame_count = 0
@@ -1056,6 +1105,152 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         if cap:
             cap.release()
         print(f"📹 Cámara {camera_id} desconectada")
+
+@app.get("/cameras/system-info")
+async def get_system_cameras_info():
+    """Obtener información detallada de las cámaras del sistema - OPTIMIZADO"""
+    try:
+        import cv2
+        system_cameras = []
+        
+        print("🔍 Escaneando cámaras del sistema (rango optimizado 0-2)...")
+        
+        # Reducir rango a 0-2 para máxima velocidad
+        for i in range(3):
+            cap = None
+            try:
+                print(f"  📷 Probando cámara índice {i}...")
+                
+                # Usar DirectShow en Windows para conexión más rápida
+                cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                
+                # Timeouts muy agresivos para velocidad máxima
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 800)   # 0.8 segundos
+                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 400)   # 0.4 segundos
+                
+                if cap.isOpened():
+                    # Intentar leer frame rápidamente
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+                        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                        fps = cap.get(cv2.CAP_PROP_FPS)
+                        
+                        system_cameras.append({
+                            "index": i,
+                            "width": int(width) if width > 0 else "Desconocido",
+                            "height": int(height) if height > 0 else "Desconocido", 
+                            "fps": int(fps) if fps > 0 else "Desconocido",
+                            "status": "Disponible y funcional"
+                        })
+                        print(f"    ✅ Cámara {i}: Funcional ({int(width)}x{int(height)})")
+                    else:
+                        system_cameras.append({
+                            "index": i,
+                            "width": "N/A",
+                            "height": "N/A", 
+                            "fps": "N/A",
+                            "status": "Detectada pero no funcional"
+                        })
+                        print(f"    ⚠️ Cámara {i}: No funcional")
+                else:
+                    print(f"    ❌ Cámara {i}: No disponible")
+                    
+            except Exception as e:
+                print(f"    💥 Cámara {i}: Error - {str(e)[:50]}...")
+                # Continuar silenciosamente para no spam
+            finally:
+                if cap:
+                    cap.release()
+        
+        print(f"✅ Escaneo completado: {len(system_cameras)} cámaras encontradas")
+        
+        # Información de configuración actual
+        config_cameras = []
+        for camera in CAMERAS_CONFIG:
+            config_cameras.append({
+                "camera_id": camera["camera_id"],
+                "camera_url": camera["camera_url"],
+                "tunel": camera.get("tunel", "Sin nombre"),
+                "source_type": camera.get("source_type", "camera"),
+                "demo_mode": camera.get("demo_mode", False),
+                "currently_monitoring": camera["camera_id"] in monitor_tasks
+            })
+        
+        return {
+            "system_cameras": system_cameras,
+            "configured_cameras": config_cameras,
+            "total_system_cameras": len(system_cameras),
+            "active_monitors": len(monitor_tasks),
+            "scan_range": "0-2 (ultra-optimizado para velocidad máxima)",
+            "scan_method": "DirectShow + timeouts agresivos"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error en get_system_cameras_info: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo información del sistema: {str(e)}")
+
+@app.get("/cameras/test/{camera_index}")
+async def test_specific_camera(camera_index: int):
+    """Verificar rápidamente si una cámara específica está disponible"""
+    try:
+        import cv2
+        
+        print(f"🔍 Probando cámara índice {camera_index}...")
+        
+        # Verificación ultra-rápida
+        cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 500)  # 0.5 segundos
+        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 200)  # 0.2 segundos
+        
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                
+                result = {
+                    "index": camera_index,
+                    "available": True,
+                    "functional": True,
+                    "width": width,
+                    "height": height,
+                    "test_time": "< 1 segundo"
+                }
+                print(f"✅ Cámara {camera_index}: Funcional ({width}x{height})")
+            else:
+                result = {
+                    "index": camera_index,
+                    "available": True,
+                    "functional": False,
+                    "width": None,
+                    "height": None,
+                    "test_time": "< 1 segundo"
+                }
+                print(f"⚠️ Cámara {camera_index}: Detectada pero no funcional")
+        else:
+            result = {
+                "index": camera_index,
+                "available": False,
+                "functional": False,
+                "width": None,
+                "height": None,
+                "test_time": "< 1 segundo"
+            }
+            print(f"❌ Cámara {camera_index}: No disponible")
+        
+        cap.release()
+        return result
+        
+    except Exception as e:
+        print(f"💥 Error probando cámara {camera_index}: {str(e)}")
+        return {
+            "index": camera_index,
+            "available": False,
+            "functional": False,
+            "error": str(e),
+            "test_time": "< 1 segundo"
+        }
 
 if __name__ == "__main__":
     import uvicorn
