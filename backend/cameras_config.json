@@ -1,38 +1,14 @@
-[    {
-        "camera_id": "video_demo_enteros",
-        "camera_url": "c:\\Users\\Ever\\VSCode\\ElDorado\\backend\\uploads\\20250614231326256747_CarroNumEnteros_v2.mp4",
-        "source_type": "video",
-        "evento": "ingreso",
-        "tunel": "Demo Túnel - Números Enteros",
-        "roi": null,
-        "motion_sensitivity": 0.2,
-        "min_motion_area": 3000,
-        "detection_cooldown": 1,
-        "demo_mode": true,
-        "loop_video": true,
-        "fps_limit": 10
-    },    {
-        "camera_id": "cam_ingreso_1",
+[
+    {
+        "camera_id": "webcam",
         "camera_url": 0,
         "source_type": "camera",
         "evento": "ingreso",
-        "tunel": "Túnel 1",
+        "tunel": "Túnel Principal",
         "roi": null,
         "motion_sensitivity": 0.3,
         "min_motion_area": 8000,
         "detection_cooldown": 5,
-        "demo_mode": false
-    },
-    {
-        "camera_id": "cam_egreso_1",
-        "camera_url": 1,
-        "source_type": "camera",
-        "evento": "egreso",
-        "tunel": "Túnel 1",
-        "roi": null,
-        "motion_sensitivity": 0.2,
-        "min_motion_area": 6000,
-        "detection_cooldown": 4,
         "demo_mode": false
     }
 ]

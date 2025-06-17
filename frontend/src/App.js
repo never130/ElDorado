@@ -2,7 +2,7 @@ import './index.css';
 import React, { useState } from "react";
 import Upload from "./components/Upload";
 import Historial from "./components/Historial";
-import RealTimeMonitor from "./components/RealTimeMonitorNew";
+import RealTimeMonitor from "./components/RealTimeMonitor";
 import Trayectoria from "./components/Trayectoria";
 import ManualUsuario from "./components/ManualUsuario";
 import ModelConfig from "./components/ModelConfig";

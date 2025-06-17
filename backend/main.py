@@ -9,6 +9,7 @@ import uuid
 import json
 import traceback
 import cv2 
+import time
 
 from contextlib import asynccontextmanager
 
@@ -903,13 +904,23 @@ async def start_camera_monitoring(camera_id: str):
     """Iniciar monitoreo en vivo de una cámara específica"""
     global monitor_tasks
     
-    # Buscar la configuración de la cámara
-    camera_config = None
-    for cam in CAMERAS_CONFIG:
-        if cam["camera_id"] == camera_id:
-            camera_config = cam
-            break
-    
+    # Para la webcam, usar configuración predeterminada
+    if camera_id == "webcam":
+        camera_config = {
+            "camera_id": "webcam",
+            "camera_url": 0,
+            "source_type": "camera",
+            "evento": "ingreso",
+            "tunel": "Túnel Principal",
+            "motion_sensitivity": 0.3,
+            "min_motion_area": 8000,
+            "detection_cooldown": 5,
+            "demo_mode": False
+        }
+    else:
+        # Buscar en la configuración de cámaras
+        camera_config = next((cam for cam in CAMERAS_CONFIG if cam["camera_id"] == camera_id), None)
+        
     if not camera_config:
         raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
       # Verificar si ya está en ejecución
@@ -966,21 +977,97 @@ async def get_monitor_status():
 
 async def monitor_camera_live(camera_id: str, camera_config: dict):
     """Función para monitorear una cámara en tiempo real"""
-    print(f"🎥 Iniciando monitoreo en vivo para cámara {camera_id}")
-    
     cap = None
     try:
         # Configurar la captura de video
         camera_url = camera_config["camera_url"]
-        
-        print(f"🔄 Intentando conectar a cámara {camera_id} (URL: {camera_url})")
-        
-        if camera_config.get("source_type") == "video":
-            # Para archivos de video
-            cap = cv2.VideoCapture(str(camera_url))
+        print(f"🎥 Iniciando monitoreo para cámara {camera_id} (URL: {camera_url})")
+
+        # Inicializar captura de video
+        if isinstance(camera_url, (int, str)) and str(camera_url).isdigit():
+            cap = cv2.VideoCapture(int(camera_url))
         else:
-            # Para cámaras web (índice numérico) con optimizaciones agresivas
-            cap = cv2.VideoCapture(int(camera_url), cv2.CAP_DSHOW)  # DirectShow para Windows es más rápido
+            cap = cv2.VideoCapture(str(camera_url))
+
+        if not cap.isOpened():
+            raise Exception(f"No se pudo abrir la cámara {camera_id}")
+
+        # Configurar propiedades de captura
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 15)
+
+        # Leer primer frame para verificar
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            raise Exception(f"No se pueden leer frames de la cámara {camera_id}")
+
+        # Obtener resolución actual
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"✅ Cámara {camera_id} conectada (Resolución: {frame_width}x{frame_height})")
+
+        # Variables de control
+        frame_count = 0
+        last_update = time.time()
+        fps = 0
+
+        # Bucle principal de monitoreo
+        while True:
+            try:
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"⚠️ Error leyendo frame de {camera_id}")
+                    await asyncio.sleep(0.1)
+                    continue
+
+                frame_count += 1
+                current_time = time.time()
+                elapsed = current_time - last_update
+
+                # Actualizar FPS cada segundo
+                if elapsed >= 1.0:
+                    fps = frame_count / elapsed
+                    frame_count = 0
+                    last_update = current_time
+
+                    await manager.broadcast_json({
+                        "type": "debug_info",
+                        "data": {
+                            "camera_id": camera_id,
+                            "fps": round(fps, 1),
+                            "resolution": f"{frame_width}x{frame_height}",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                    })
+
+                # Enviar detección cada 30 frames
+                if frame_count % 30 == 0:
+                    await manager.broadcast_json({
+                        "type": "detection",
+                        "camera_id": camera_id,
+                        "data": {
+                            "timestamp": datetime.now().isoformat(),
+                            "fps": round(fps, 1)
+                        }
+                    })
+
+                # Pausa para no saturar CPU
+                await asyncio.sleep(0.01)
+
+            except Exception as e:
+                print(f"❌ Error en frame: {e}")
+                await asyncio.sleep(0.1)
+
+    except asyncio.CancelledError:
+        print(f"� Monitoreo de {camera_id} cancelado")
+    except Exception as e:
+        print(f"❌ Error en monitor_camera_live: {e}")
+        raise
+    finally:
+        if cap:
+            cap.release()
+            print(f"📹 Cámara {camera_id} liberada")
             
             # Configurar timeouts muy estrictos para conexión rápida
             cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)  # Reducido a 1.5 segundos
@@ -1005,40 +1092,101 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                 
                 if not cap.isOpened():
                     print(f"❌ Error: Cámara {camera_id} no disponible después de reintentos")
-                    return
-        
-        # Verificar que puede leer frames con timeout
-        print(f"🔍 Verificando lectura de frames para cámara {camera_id}...")
-        
-        # Intentar leer frame con múltiples intentos rápidos
-        frame_read_attempts = 0
-        max_attempts = 3
-        ret, test_frame = False, None
-        
-        while frame_read_attempts < max_attempts and not ret:
-            ret, test_frame = cap.read()
-            frame_read_attempts += 1
-            if not ret:
-                print(f"⚠️ Intento {frame_read_attempts}/{max_attempts} de lectura falló para cámara {camera_id}")
-                await asyncio.sleep(0.1)  # Breve pausa entre intentos
-        
-        if not ret or test_frame is None:
-            print(f"❌ Error: Cámara {camera_id} no puede leer frames después de {max_attempts} intentos")
-            return
-        
-        print(f"✅ Cámara {camera_id} conectada exitosamente (Resolución: {test_frame.shape[1]}x{test_frame.shape[0]})")
-        
-        # Configuración de detección
-        frame_count = 0
-        detection_interval = 30  # Procesar cada N frames para optimizar rendimiento
-        last_detection_time = {}  # Para cooldown por número
-        cooldown_seconds = camera_config.get("detection_cooldown", 5)
-        
-        while True:
-            ret, frame = cap.read()
+                    return        # Verificar conexión y configurar cámara
+        if not cap.isOpened():
+            raise Exception(f"No se pudo abrir la cámara {camera_id}")
             
-            if not ret:
-                if camera_config.get("loop_video", False):
+        # Configurar captura para mejor rendimiento
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FPS, 15)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        
+        # Verificar que podemos leer frames
+        ret = False
+        for _ in range(3):  # Intentar hasta 3 veces
+            ret, frame = cap.read()
+            if ret and frame is not None:
+                break
+            await asyncio.sleep(0.1)
+            
+        if not ret:
+            raise Exception(f"No se pueden leer frames de la cámara {camera_id}")
+            
+        # Obtener resolución actual
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"✅ Cámara {camera_id} conectada exitosamente (Resolución: {frame_width}x{frame_height})")
+          frame_count = 0
+        last_time = time.time()
+        fps_update_interval = 1.0  # Actualizar FPS cada segundo
+        cooldown_seconds = camera_config.get("detection_cooldown", 5)        # Bucle principal de monitoreo
+        frame_count = 0
+        detection_interval = 30  # Procesar cada N frames
+        last_time = time.time()
+        
+        try:
+            while True:
+                try:
+                    # Leer frame con timeout
+                    ret, frame = cap.read()
+                    if not ret:
+                        print(f"⚠️ Error al leer frame de {camera_id}")
+                        await asyncio.sleep(0.1)
+                        continue
+                    
+                    # Control de FPS y rendimiento
+                    frame_count += 1
+                    current_time = time.time()
+                    elapsed_time = current_time - last_time
+                    
+                    # Actualizar estadísticas cada segundo
+                    if elapsed_time >= 1.0:
+                        fps = frame_count / elapsed_time
+                        frame_count = 0
+                        last_time = current_time
+                        
+                        # Broadcast de estadísticas
+                        await manager.broadcast_json({
+                            "type": "debug_info",
+                            "data": {
+                                "camera_id": camera_id,
+                                "fps": round(fps, 1),
+                                "resolution": f"{frame_width}x{frame_height}",
+                                "status": "active"
+                            }
+                        })
+                    
+                    # Procesar detecciones cada N frames
+                    if frame_count % detection_interval == 0:
+                        # Aquí iría tu lógica de detección de números
+                        # Por ahora solo enviamos un mensaje de prueba
+                        await manager.broadcast_json({
+                            "type": "detection",
+                            "data": {
+                                "camera_id": camera_id,
+                                "timestamp": datetime.now().isoformat(),
+                                "status": "processing"
+                            }
+                        })
+                    
+                    # Evitar saturación de CPU
+                    await asyncio.sleep(0.01)
+                    
+                except Exception as frame_error:
+                    print(f"Error procesando frame: {frame_error}")
+                    await asyncio.sleep(0.1)
+                    continue
+                    
+        except asyncio.CancelledError:
+            print(f"📹 Cámara {camera_id} desconectada")
+            raise
+        except Exception as e:
+            print(f"❌ Error en monitor_camera_live: {e}")
+            raise
+        finally:
+            if cap:
+                cap.release()
                     # Reiniciar video si está en modo loop
                     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
@@ -1396,6 +1544,66 @@ async def get_monitor_debug_info(camera_id: str):
             pass
     
     return task_info
+
+# Esta línea se eliminó para corregir indentación
+        cap.release()
+
+@app.get("/video/stream/{camera_id}")
+async def video_stream(camera_id: str):
+    """Stream de video en vivo desde una cámara"""
+    try:
+        # Si la cámara es la webcam (camera_id == "webcam"), usar índice 0
+        if camera_id == "webcam":
+            cap = cv2.VideoCapture(0)
+        else:
+            # Buscar la configuración de la cámara
+            cameras = load_cameras_config()
+            camera_config = next((c for c in cameras if c["camera_id"] == camera_id), None)
+            if not camera_config:
+                raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
+                
+            cap = cv2.VideoCapture(camera_config["camera_url"])
+            
+        if not cap.isOpened():
+            raise HTTPException(status_code=500, detail="No se pudo abrir la cámara")
+            
+        # Configurar resolución preferida
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        
+        async def generate_frames():
+            try:
+                while True:
+                    success, frame = cap.read()
+                    if not success:
+                        break
+                        
+                    # Codificar frame a JPEG
+                    ret, buffer = cv2.imencode('.jpg', frame)
+                    if not ret:
+                        continue
+                        
+                    # Convertir a bytes y enviar
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                    
+                    # Pequeña pausa para controlar FPS
+                    await asyncio.sleep(0.033)  # ~30 FPS
+                    
+            except Exception as e:
+                print(f"Error en generate_frames: {e}")
+            finally:
+                cap.release()
+                
+        return StreamingResponse(
+            generate_frames(),
+            media_type='multipart/x-mixed-replace; boundary=frame'
+        )
+        
+    except Exception as e:
+        print(f"Error en video_stream: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Inicialización del servidor
 if __name__ == "__main__":
