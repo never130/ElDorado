@@ -36,34 +36,45 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"WebSocket connection established: {websocket.client}")
+        print(f"🔌 WebSocket conectado: {websocket.client}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-        print(f"WebSocket connection closed: {websocket.client}")
+        print(f"🔌❌ WebSocket desconectado: {websocket.client}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
 
-    async def broadcast(self, message: str): # Kept for potential direct text broadcasts
+    async def send_json_to_connection(self, data: dict, websocket: WebSocket):
+        """Enviar mensaje JSON a una conexión específica"""
+        try:
+            await websocket.send_json(data)
+        except Exception as e:
+            print(f"❌ Error enviando mensaje JSON a {websocket.client}: {e}")
+
+    async def broadcast(self, message: str):
         for connection in self.active_connections:
-            await connection.send_text(message)
+            try:
+                await connection.send_text(message)
+            except:
+                pass
 
     async def broadcast_json(self, data: dict):
-        # Prepare a deep copy for modification if necessary, or ensure data is safe to modify
-        # For simplicity, assuming data can be modified or is already prepared
-        # Ensure datetime objects are serialized if they exist at top level of 'data' or 'data.data'
-        # The current broadcast_message structure is {"type": "new_detection", "data": db_record_dict}
-        # So, db_record_dict is what needs checking.
-        
-        # This check is now done before calling broadcast_json in most places.
-        # However, a general check here can be a safeguard.
-        # data_to_send = json.loads(json.dumps(data, default=str)) # Robust serialization
-        # Using direct send_json, FastAPI handles datetime to ISO string.
-
+        print(f"📡 Broadcasting a {len(self.active_connections)} conexiones: {data.get('type', 'unknown')}")
+        disconnected = []
         for connection in self.active_connections:
-            await connection.send_json(data)
+            try:
+                await connection.send_json(data)
+                print(f"✅ Mensaje enviado a {connection.client}")
+            except Exception as e:
+                print(f"❌ Error enviando a {connection.client}: {e}")
+                disconnected.append(connection)
+        
+        # Remover conexiones rotas
+        for conn in disconnected:
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
 
 manager = ConnectionManager()
 
@@ -828,18 +839,35 @@ async def auto_capture_status():
 
 @app.websocket("/ws/detections")
 async def websocket_endpoint(websocket: WebSocket):
+    print(f"🔌 Nueva conexión WebSocket desde {websocket.client}")
     await manager.connect(websocket)
     try:
+        # Enviar mensaje de bienvenida
+        welcome_message = {
+            "type": "connection_established",
+            "message": "Conectado al WebSocket de detecciones",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        await manager.send_json_to_connection(welcome_message, websocket)
+        print(f"✅ WebSocket conectado: {websocket.client}")
+        
         while True:
-            # Keep connection alive, optionally handle incoming messages from client
-            data = await websocket.receive_text() 
-            # Example: await manager.send_personal_message(f"Message text was: {data}", websocket)
+            # Keep connection alive
+            data = await websocket.receive_text()
+            print(f"📩 Mensaje recibido del cliente: {data}")
+            # Echo back para confirmar comunicación
+            echo_response = {
+                "type": "echo",
+                "original_message": data,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            await manager.send_json_to_connection(echo_response, websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        print(f"Client {websocket.client} disconnected from WebSocket /ws/detections.")
+        print(f"🔌❌ Cliente {websocket.client} desconectado del WebSocket")
     except Exception as e:
-        print(f"Error en WebSocket /ws/detections para {websocket.client}: {e}")
-        manager.disconnect(websocket) # Ensure disconnect on other errors too
+        print(f"❌ Error en WebSocket para {websocket.client}: {e}")
+        manager.disconnect(websocket)
 
 # Example model info endpoint (if processor object exists and has details)
 # from utils.image_processing import processor # Assuming processor is initialized here or globally
@@ -1019,20 +1047,38 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                     break
             
             frame_count += 1
-            
-            # Procesar solo cada N frames para optimizar
+              # Procesar solo cada N frames para optimizar
             if frame_count % detection_interval != 0:
                 continue
             
             try:
                 # Detectar números en el frame
                 _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+                  # Debug: Mostrar qué está detectando el modelo
+                if frame_count % 30 == 0:  # Log cada 30 frames procesados
+                    print(f"🔍 Frame {frame_count}: numero_detectado='{numero_detectado}', confianza={confianza_placa}")
+                    
+                    # Enviar mensaje de debug por WebSocket
+                    debug_message = {
+                        "type": "debug_info",
+                        "data": {
+                            "camera_id": camera_id,
+                            "frame_count": frame_count,
+                            "numero_detectado": numero_detectado,
+                            "confianza": confianza_placa,
+                            "processing": True
+                        }
+                    }
+                    asyncio.create_task(manager.broadcast_json(debug_message))
                 
                 if numero_detectado and confianza_placa is not None:
                     confianza_float = float(confianza_placa) if confianza_placa else 0.0
                     
-                    # Aplicar filtro de confianza mínima
-                    if confianza_float >= 0.6:  # 60% de confianza mínima para tiempo real
+                    # Debug: Log todas las detecciones, no solo las válidas
+                    print(f"🔍 Detección encontrada: N°{numero_detectado}, Conf: {confianza_float:.3f}")
+                    
+                    # Aplicar filtro de confianza mínima (reducido para testing)
+                    if confianza_float >= 0.3:  # 30% de confianza mínima para testing (era 0.6)
                         current_time = datetime.now()
                         
                         # Verificar cooldown para evitar duplicados
@@ -1076,14 +1122,14 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                         db_record_dict["id"] = str(record_id)
                         if isinstance(db_record_dict.get("timestamp"), datetime):
                             db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
-                        
-                        # Broadcast via WebSocket
+                          # Broadcast via WebSocket
                         broadcast_message = {
                             "type": "new_detection", 
                             "data": db_record_dict,
                             "source": "live_monitoring",
                             "camera_id": camera_id
                         }
+                        print(f"📡 Enviando detección por WebSocket a {len(manager.active_connections)} conexiones")
                         asyncio.create_task(manager.broadcast_json(broadcast_message))
                         
                         print(f"🎯 Detección en vivo: Cámara {camera_id}, N°{numero_detectado}, Conf: {confianza_float:.3f}, DB_ID: {record_id}")
@@ -1252,6 +1298,113 @@ async def test_specific_camera(camera_index: int):
             "test_time": "< 1 segundo"
         }
 
+@app.get("/cameras/capture-frame/{camera_id}")
+async def capture_frame_from_camera(camera_id: str):
+    """Capturar un frame actual de la cámara para debugging"""
+    try:
+        # Encontrar configuración de la cámara
+        camera_config = None
+        for cam in CAMERAS_CONFIG:
+            if cam["camera_id"] == camera_id:
+                camera_config = cam
+                break
+        
+        if not camera_config:
+            raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
+        
+        camera_url = camera_config["camera_url"]
+        
+        # Abrir cámara temporalmente
+        if camera_config["source_type"] == "camera":
+            cap = cv2.VideoCapture(int(camera_url), cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(camera_url)
+            
+        if not cap.isOpened():
+            raise HTTPException(status_code=500, detail=f"No se pudo abrir la cámara {camera_id}")
+        
+        # Capturar frame
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret or frame is None:
+            raise HTTPException(status_code=500, detail=f"No se pudo capturar frame de cámara {camera_id}")
+        
+        # Guardar frame temporalmente
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        frame_filename = f"debug_frame_{camera_id}_{timestamp_str}.jpg"
+        frame_path = UPLOAD_DIR / frame_filename
+        cv2.imwrite(str(frame_path), frame)
+        
+        # Intentar detección en el frame capturado para debugging
+        try:
+            _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
+            detection_result = {
+                "numero_detectado": numero_detectado,
+                "confianza": float(confianza_placa) if confianza_placa else None
+            }
+        except Exception as e_detect:
+            detection_result = {
+                "error": f"Error en detección: {str(e_detect)}"
+            }
+        
+        return {
+            "camera_id": camera_id,
+            "frame_captured": True,
+            "frame_path": f"/uploads/{frame_filename}",
+            "frame_size": {
+                "width": frame.shape[1],
+                "height": frame.shape[0]
+            },
+            "detection_test": detection_result,
+            "timestamp": timestamp_str
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"💥 Error capturando frame de cámara {camera_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+# Agregar endpoint para debug de monitoreo
+@app.get("/monitor/debug/{camera_id}")
+async def get_monitor_debug_info(camera_id: str):
+    """Obtener información de debug del monitoreo de una cámara"""
+    active_task = monitor_tasks.get(camera_id)
+    
+    if not active_task:
+        return {
+            "camera_id": camera_id,
+            "is_monitoring": False,
+            "error": "No hay tarea de monitoreo activa"
+        }
+    
+    # Info básica de la tarea
+    task_info = {
+        "camera_id": camera_id,
+        "is_monitoring": True,
+        "task_done": active_task.done(),
+        "task_cancelled": active_task.cancelled()
+    }
+    
+    if active_task.done():
+        try:
+            exception = active_task.exception()
+            if exception:
+                task_info["task_exception"] = str(exception)
+        except:
+            pass
+    
+    return task_info
+
+# Inicialización del servidor
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    print("🚀 Iniciando servidor FastAPI...")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )

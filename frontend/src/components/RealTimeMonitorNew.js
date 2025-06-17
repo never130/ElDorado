@@ -8,10 +8,11 @@ const RealTimeMonitor = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorError, setMonitorError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  const [videoStream, setVideoStream] = useState(null);
-  const [videoError, setVideoError] = useState('');  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [videoStream, setVideoStream] = useState(null);  const [videoError, setVideoError] = useState('');
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
+  const [debugInfo, setDebugInfo] = useState(null);
   const videoRef = useRef(null);
   const ws = useRef(null);
   const wsReconnectTimeout = useRef(null);  // Cargar datos iniciales
@@ -164,8 +165,7 @@ const RealTimeMonitor = () => {
       console.log('Setting videoError:', errorMessage);
       setVideoError(errorMessage);
     }
-  }, [stopVideoStream, videoError, videoStream]);
-  // Obtener información del sistema
+  }, [stopVideoStream, videoError, videoStream]);  // Obtener información del sistema
   const getSystemInfo = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:8000/cameras/system-info');
@@ -176,6 +176,40 @@ const RealTimeMonitor = () => {
       setMonitorError('Error al obtener información del sistema: ' + error.message);
     }
   }, []);
+
+  // Capturar frame de test para debugging
+  const captureTestFrame = useCallback(async () => {
+    if (!selectedCamera) return;
+    
+    try {
+      console.log('📸 Capturando frame de test para cámara:', selectedCamera);
+      const response = await axios.get(`http://localhost:8000/cameras/capture-frame/${selectedCamera}`);
+      console.log('📸 Frame capturado:', response.data);
+      
+      // Mostrar información en un alert (temporal)
+      const info = response.data;
+      const detectionInfo = info.detection_test;
+      
+      let message = `📸 Frame capturado exitosamente!\n\n`;
+      message += `📂 Guardado en: ${info.frame_path}\n`;
+      message += `📏 Tamaño: ${info.frame_size.width}x${info.frame_size.height}\n`;
+      message += `🕒 Timestamp: ${info.timestamp}\n\n`;
+      
+      if (detectionInfo.error) {
+        message += `❌ Error en detección: ${detectionInfo.error}`;
+      } else {
+        message += `🔍 Detección:\n`;
+        message += `   Número: ${detectionInfo.numero_detectado || 'Ninguno'}\n`;
+        message += `   Confianza: ${detectionInfo.confianza || 'N/A'}`;
+      }
+      
+      alert(message);
+      
+    } catch (error) {
+      console.error('Error capturando frame:', error);
+      setMonitorError('Error al capturar frame: ' + (error.response?.data?.detail || error.message));
+    }
+  }, [selectedCamera]);
   useEffect(() => {
     // Solo cargar una vez al montar el componente
     loadInitialData();
@@ -206,15 +240,24 @@ const RealTimeMonitor = () => {
           reconnectAttempts = 0; // Reset counter on successful connection
           console.log('WebSocket conectado exitosamente');
         }
-      };
-
-      ws.current.onmessage = (event) => {
+      };      ws.current.onmessage = (event) => {
         if (!mounted) return;
         
         try {
           const message = JSON.parse(event.data);
+          console.log('📨 Mensaje WebSocket recibido:', message);
+          
           if (message.type === 'monitor_detection' || message.type === 'new_detection') {
-            setRecentDetections(prev => [message.data, ...prev].slice(0, 10));
+            console.log('🎯 Nueva detección recibida:', message.data);
+            setRecentDetections(prev => [message.data, ...prev].slice(0, 10));          } else if (message.type === 'debug_info') {
+            console.log('🔍 Info de debug recibida:', message.data);
+            // Mostrar info de debug en el estado para que aparezca en la UI
+            setDebugInfo({
+              ...message.data,
+              lastUpdate: new Date().toLocaleTimeString()
+            });
+          } else {
+            console.log('📨 Mensaje WebSocket no reconocido:', message);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -283,7 +326,7 @@ const RealTimeMonitor = () => {
           🎥 Control de Cámaras
         </h2>
         
-        <div className="grid md:grid-cols-4 gap-4 items-end">
+        <div className="grid md:grid-cols-5 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-purple-700 mb-2">
               Seleccionar Cámara
@@ -318,13 +361,26 @@ const RealTimeMonitor = () => {
               {isMonitoring ? '⏹️ Detener' : '▶️ Iniciar'}
             </button>
           </div>
-          
-          <div>
+            <div>
             <button
               onClick={getSystemInfo}
               className="w-full px-4 py-2 rounded-md font-medium bg-blue-500 text-white hover:bg-blue-600"
             >
               🔍 Info Cámaras
+            </button>
+          </div>
+          
+          <div>
+            <button
+              onClick={captureTestFrame}
+              disabled={!selectedCamera}
+              className={`w-full px-4 py-2 rounded-md font-medium ${
+                !selectedCamera
+                  ? 'bg-gray-300 text-gray-500'
+                  : 'bg-orange-500 text-white hover:bg-orange-600'
+              }`}
+            >
+              📸 Test Frame
             </button>
           </div>
           
@@ -558,8 +614,7 @@ const RealTimeMonitor = () => {
                 </div>
               </div>
             </div>
-            
-            <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-300">
+              <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-300">
               <div className="text-sm">
                 <strong>📊 Resumen:</strong> {systemInfo.total_system_cameras} cámara(s) detectada(s) | {systemInfo.active_monitors} monitor(es) activo(s)
               </div>
@@ -570,6 +625,39 @@ const RealTimeMonitor = () => {
           </div>
         </div>
       )}
+
+      {/* Panel de Debug en Tiempo Real */}
+      {debugInfo && (
+        <div className="bg-white rounded-lg p-6 mt-6 shadow-sm border-l-4 border-yellow-500">
+          <h2 className="text-xl font-bold text-yellow-800 mb-4">
+            🔍 Información de Debug en Tiempo Real
+          </h2>
+          <div className="bg-yellow-50 p-4 rounded border">
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-sm font-medium text-yellow-700">Cámara:</div>
+                <div className="text-lg">{debugInfo.camera_id}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-yellow-700">Frame Actual:</div>
+                <div className="text-lg">{debugInfo.frame_count}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-yellow-700">Número Detectado:</div>
+                <div className="text-lg">{debugInfo.numero_detectado || 'Ninguno'}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-yellow-700">Confianza:</div>
+                <div className="text-lg">{debugInfo.confianza ? debugInfo.confianza.toFixed(3) : 'N/A'}</div>
+              </div>
+            </div>
+            <div className="mt-3 text-sm text-gray-600">
+              Última actualización: {debugInfo.lastUpdate}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
