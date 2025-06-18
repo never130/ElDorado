@@ -979,11 +979,9 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
     """Función para monitorear una cámara en tiempo real"""
     cap = None
     try:
-        # Configurar la captura de video
         camera_url = camera_config["camera_url"]
         print(f"🎥 Iniciando monitoreo para cámara {camera_id} (URL: {camera_url})")
 
-        # Inicializar captura de video
         if isinstance(camera_url, (int, str)) and str(camera_url).isdigit():
             cap = cv2.VideoCapture(int(camera_url))
         else:
@@ -992,45 +990,38 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         if not cap.isOpened():
             raise Exception(f"No se pudo abrir la cámara {camera_id}")
 
-        # Configurar propiedades de captura
+        # Configurar propiedades
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         cap.set(cv2.CAP_PROP_FPS, 15)
 
-        # Leer primer frame para verificar
+        # Verificar lectura
         ret, frame = cap.read()
         if not ret or frame is None:
             raise Exception(f"No se pueden leer frames de la cámara {camera_id}")
 
-        # Obtener resolución actual
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"✅ Cámara {camera_id} conectada (Resolución: {frame_width}x{frame_height})")
-
-        # Variables de control
         frame_count = 0
-        last_update = time.time()
+        last_time = time.time()
         fps = 0
+        print(f"✅ Cámara conectada (Resolución: {frame_width}x{frame_height})")
 
-        # Bucle principal de monitoreo
         while True:
             try:
                 ret, frame = cap.read()
                 if not ret:
-                    print(f"⚠️ Error leyendo frame de {camera_id}")
                     await asyncio.sleep(0.1)
                     continue
 
                 frame_count += 1
                 current_time = time.time()
-                elapsed = current_time - last_update
+                elapsed = current_time - last_time
 
-                # Actualizar FPS cada segundo
                 if elapsed >= 1.0:
                     fps = frame_count / elapsed
                     frame_count = 0
-                    last_update = current_time
-
+                    last_time = current_time
                     await manager.broadcast_json({
                         "type": "debug_info",
                         "data": {
@@ -1041,264 +1032,29 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                         }
                     })
 
-                # Enviar detección cada 30 frames
                 if frame_count % 30 == 0:
                     await manager.broadcast_json({
                         "type": "detection",
-                        "camera_id": camera_id,
                         "data": {
+                            "camera_id": camera_id,
                             "timestamp": datetime.now().isoformat(),
                             "fps": round(fps, 1)
                         }
                     })
 
-                # Pausa para no saturar CPU
                 await asyncio.sleep(0.01)
-
             except Exception as e:
                 print(f"❌ Error en frame: {e}")
                 await asyncio.sleep(0.1)
-
     except asyncio.CancelledError:
-        print(f"� Monitoreo de {camera_id} cancelado")
+        print(f"🛑 Monitor cancelado: {camera_id}")
     except Exception as e:
-        print(f"❌ Error en monitor_camera_live: {e}")
+        print(f"❌ Error: {e}")
         raise
     finally:
         if cap:
             cap.release()
-            print(f"📹 Cámara {camera_id} liberada")
-            
-            # Configurar timeouts muy estrictos para conexión rápida
-            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1500)  # Reducido a 1.5 segundos
-            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 500)    # Reducido a 0.5 segundos
-            
-            # Configurar propiedades básicas para acelerar
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            cap.set(cv2.CAP_PROP_FPS, 15)  # Reducido FPS para menos carga
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Buffer mínimo para reducir latencia
-        
-        # Verificación rápida de conexión
-        if not cap.isOpened():
-            print(f"❌ Error: No se pudo abrir la cámara {camera_id} en el primer intento")
-            # Intentar sin DirectShow como fallback
-            if camera_config.get("source_type") != "video":
-                print(f"🔄 Reintentando cámara {camera_id} sin DirectShow...")
-                cap.release()
-                cap = cv2.VideoCapture(int(camera_url))
-                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 2000)
-                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000)
-                
-                if not cap.isOpened():
-                    print(f"❌ Error: Cámara {camera_id} no disponible después de reintentos")
-                    return        # Verificar conexión y configurar cámara
-        if not cap.isOpened():
-            raise Exception(f"No se pudo abrir la cámara {camera_id}")
-            
-        # Configurar captura para mejor rendimiento
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 15)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        
-        # Verificar que podemos leer frames
-        ret = False
-        for _ in range(3):  # Intentar hasta 3 veces
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                break
-            await asyncio.sleep(0.1)
-            
-        if not ret:
-            raise Exception(f"No se pueden leer frames de la cámara {camera_id}")
-            
-        # Obtener resolución actual
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"✅ Cámara {camera_id} conectada exitosamente (Resolución: {frame_width}x{frame_height})")
-          frame_count = 0
-        last_time = time.time()
-        fps_update_interval = 1.0  # Actualizar FPS cada segundo
-        cooldown_seconds = camera_config.get("detection_cooldown", 5)        # Bucle principal de monitoreo
-        frame_count = 0
-        detection_interval = 30  # Procesar cada N frames
-        last_time = time.time()
-        
-        try:
-            while True:
-                try:
-                    # Leer frame con timeout
-                    ret, frame = cap.read()
-                    if not ret:
-                        print(f"⚠️ Error al leer frame de {camera_id}")
-                        await asyncio.sleep(0.1)
-                        continue
-                    
-                    # Control de FPS y rendimiento
-                    frame_count += 1
-                    current_time = time.time()
-                    elapsed_time = current_time - last_time
-                    
-                    # Actualizar estadísticas cada segundo
-                    if elapsed_time >= 1.0:
-                        fps = frame_count / elapsed_time
-                        frame_count = 0
-                        last_time = current_time
-                        
-                        # Broadcast de estadísticas
-                        await manager.broadcast_json({
-                            "type": "debug_info",
-                            "data": {
-                                "camera_id": camera_id,
-                                "fps": round(fps, 1),
-                                "resolution": f"{frame_width}x{frame_height}",
-                                "status": "active"
-                            }
-                        })
-                    
-                    # Procesar detecciones cada N frames
-                    if frame_count % detection_interval == 0:
-                        # Aquí iría tu lógica de detección de números
-                        # Por ahora solo enviamos un mensaje de prueba
-                        await manager.broadcast_json({
-                            "type": "detection",
-                            "data": {
-                                "camera_id": camera_id,
-                                "timestamp": datetime.now().isoformat(),
-                                "status": "processing"
-                            }
-                        })
-                    
-                    # Evitar saturación de CPU
-                    await asyncio.sleep(0.01)
-                    
-                except Exception as frame_error:
-                    print(f"Error procesando frame: {frame_error}")
-                    await asyncio.sleep(0.1)
-                    continue
-                    
-        except asyncio.CancelledError:
-            print(f"📹 Cámara {camera_id} desconectada")
-            raise
-        except Exception as e:
-            print(f"❌ Error en monitor_camera_live: {e}")
-            raise
-        finally:
-            if cap:
-                cap.release()
-                    # Reiniciar video si está en modo loop
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    continue
-                else:
-                    print(f"📹 Fin del video para cámara {camera_id}")
-                    break
-            
-            frame_count += 1
-              # Procesar solo cada N frames para optimizar
-            if frame_count % detection_interval != 0:
-                continue
-            
-            try:
-                # Detectar números en el frame
-                _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
-                  # Debug: Mostrar qué está detectando el modelo
-                if frame_count % 30 == 0:  # Log cada 30 frames procesados
-                    print(f"🔍 Frame {frame_count}: numero_detectado='{numero_detectado}', confianza={confianza_placa}")
-                    
-                    # Enviar mensaje de debug por WebSocket
-                    debug_message = {
-                        "type": "debug_info",
-                        "data": {
-                            "camera_id": camera_id,
-                            "frame_count": frame_count,
-                            "numero_detectado": numero_detectado,
-                            "confianza": confianza_placa,
-                            "processing": True
-                        }
-                    }
-                    asyncio.create_task(manager.broadcast_json(debug_message))
-                
-                if numero_detectado and confianza_placa is not None:
-                    confianza_float = float(confianza_placa) if confianza_placa else 0.0
-                    
-                    # Debug: Log todas las detecciones, no solo las válidas
-                    print(f"🔍 Detección encontrada: N°{numero_detectado}, Conf: {confianza_float:.3f}")
-                    
-                    # Aplicar filtro de confianza mínima (reducido para testing)
-                    if confianza_float >= 0.3:  # 30% de confianza mínima para testing (era 0.6)
-                        current_time = datetime.now()
-                        
-                        # Verificar cooldown para evitar duplicados
-                        if numero_detectado in last_detection_time:
-                            time_diff = (current_time - last_detection_time[numero_detectado]).total_seconds()
-                            if time_diff < cooldown_seconds:
-                                continue  # Skip esta detección por cooldown
-                        
-                        # Actualizar tiempo de última detección
-                        last_detection_time[numero_detectado] = current_time
-                        
-                        # Guardar frame como imagen
-                        timestamp_str = current_time.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # Microsegundos a milisegundos
-                        frame_filename = f"live_{camera_id}_{timestamp_str}_{numero_detectado}_{confianza_float:.3f}.jpg"
-                        frame_path = UPLOAD_DIR / frame_filename
-                        cv2.imwrite(str(frame_path), frame)
-                        
-                        # Crear registro en la base de datos
-                        vagoneta_data = VagonetaCreate(
-                            numero=str(numero_detectado),
-                            imagen_path=f"uploads/{frame_filename}",
-                            timestamp=current_time.replace(tzinfo=timezone.utc),
-                            tunel=camera_config.get("tunel"),
-                            evento=camera_config.get("evento", "ingreso"),
-                            modelo_ladrillo=None,
-                            merma=None,
-                            metadata={
-                                "camera_id": camera_id,
-                                "frame_number": frame_count,
-                                "detection_source": "live_monitoring"
-                            },
-                            confianza=min(confianza_float, 1.0),  # Asegurar que no sea > 1.0
-                            origen_deteccion="camera_capture"
-                        )
-                        
-                        record_id = crud.create_vagoneta_record(vagoneta_data)
-                        
-                        # Preparar datos para broadcast
-                        db_record_dict = vagoneta_data.dict()
-                        db_record_dict["_id"] = str(record_id)
-                        db_record_dict["id"] = str(record_id)
-                        if isinstance(db_record_dict.get("timestamp"), datetime):
-                            db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
-                          # Broadcast via WebSocket
-                        broadcast_message = {
-                            "type": "new_detection", 
-                            "data": db_record_dict,
-                            "source": "live_monitoring",
-                            "camera_id": camera_id
-                        }
-                        print(f"📡 Enviando detección por WebSocket a {len(manager.active_connections)} conexiones")
-                        asyncio.create_task(manager.broadcast_json(broadcast_message))
-                        
-                        print(f"🎯 Detección en vivo: Cámara {camera_id}, N°{numero_detectado}, Conf: {confianza_float:.3f}, DB_ID: {record_id}")
-                        
-            except Exception as e_detect:
-                print(f"⚠️ Error detectando en frame de cámara {camera_id}: {e_detect}")
-                continue
-                
-            # Pequeña pausa para no saturar el CPU
-            await asyncio.sleep(0.1)
-    
-    except asyncio.CancelledError:
-        print(f"🛑 Monitoreo de cámara {camera_id} cancelado")
-    except Exception as e:
-        print(f"❌ Error en monitoreo de cámara {camera_id}: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        if cap:
-            cap.release()
-        print(f"📹 Cámara {camera_id} desconectada")
+            print(f"📹 Cámara liberada: {camera_id}")
 
 @app.get("/cameras/system-info")
 async def get_system_cameras_info():
@@ -1546,7 +1302,7 @@ async def get_monitor_debug_info(camera_id: str):
     return task_info
 
 # Esta línea se eliminó para corregir indentación
-        cap.release()
+       
 
 @app.get("/video/stream/{camera_id}")
 async def video_stream(camera_id: str):

@@ -76,7 +76,8 @@ const RealTimeMonitor = () => {
     if (!camera) return;
 
     const wsUrl = 'ws://localhost:8000/ws/detections';
-    let mounted = true;    let reconnectAttempts = 0;
+    let mounted = true;
+    let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
     const reconnectDelay = 3000; // 3 segundos entre intentos
 
@@ -107,10 +108,12 @@ const RealTimeMonitor = () => {
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'detection' && (!data.camera_id || data.camera_id === camera.camera_id)) {
-              setDetections(prev => [data.detection, ...prev].slice(0, 10));
+              // Validar que detection exista y tenga propiedades
+              const detection = data.detection || data.data || {};
+              setDetections(prev => [detection, ...prev].slice(0, 10));
               setStats(prev => ({
                 detections: prev.detections + 1,
-                confidence: data.detection.confidence || prev.confidence,
+                confidence: typeof detection.confidence === 'number' ? detection.confidence : prev.confidence,
                 fps: data.fps || prev.fps
               }));
             }
@@ -187,13 +190,13 @@ const RealTimeMonitor = () => {
     <div className="bg-white rounded-lg p-4 shadow-sm border-l-4 border-green-500">
       <div className="flex justify-between items-start">
         <div>
-          <div className="text-lg font-bold text-gray-800">#{detection.numero}</div>
+          <div className="text-lg font-bold text-gray-800">#{detection?.numero ?? 'N/A'}</div>
           <div className="text-sm text-gray-600">
-            Confianza: {Math.round(detection.confidence * 100)}%
+            Confianza: {typeof detection?.confidence === 'number' ? Math.round(detection.confidence * 100) + '%' : 'N/A'}
           </div>
         </div>
         <div className="text-xs text-gray-500">
-          {new Date(detection.timestamp).toLocaleTimeString()}
+          {detection?.timestamp ? new Date(detection.timestamp).toLocaleTimeString() : ''}
         </div>
       </div>
     </div>
