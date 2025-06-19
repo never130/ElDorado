@@ -1091,4 +1091,31 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
     finally:
         if cap:
             cap.release()
-        print(f"� Liberando recursos de cámara {camera_id}")
+        print(f"🔌 Liberando recursos de cámara {camera_id}")
+
+# ====================
+# INICIALIZACIÓN DEL SERVIDOR
+# ====================
+
+if __name__ == "__main__":
+    import uvicorn
+    print("🚀 Iniciando servidor FastAPI...")
+    print("📡 Backend disponible en: http://localhost:8000")
+    print("📚 Documentación API en: http://localhost:8000/docs")
+    print("🔌 WebSocket en: ws://localhost:8000/ws/detections")
+    print("=" * 60)
+    
+    try:
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=8000,
+            reload=False,  # No reload para producción
+            log_level="info"
+        )
+    except KeyboardInterrupt:
+        print("\n🛑 Servidor detenido por el usuario")
+    except Exception as e:
+        print(f"❌ Error iniciando servidor: {e}")
+        import traceback
+        traceback.print_exc()
