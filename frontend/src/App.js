@@ -2,7 +2,7 @@ import './index.css';
 import React, { useState } from "react";
 import Upload from "./components/Upload";
 import Historial from "./components/Historial";
-import RealTimeMonitor from "./components/RealTimeMonitor";
+import RealTimeMonitorNew from "./components/RealTimeMonitorNew";
 import Trayectoria from "./components/Trayectoria";
 import ManualUsuario from "./components/ManualUsuario";
 import ModelConfig from "./components/ModelConfig";
@@ -17,7 +17,7 @@ const App = () => {
       <Navbar view={view} setView={setView} />      <main className="w-full flex-1 flex flex-col items-center">
         {view === "upload" && <Upload />}
         {view === "historial" && <Historial />}
-        {view === "realtime" && <RealTimeMonitor />}
+        {view === "realtime" && <RealTimeMonitorNew />}
         {view === "trayectoria" && <Trayectoria />}
         {view === "manual" && <ManualUsuario />}
         {view === "config" && <ModelConfig />}

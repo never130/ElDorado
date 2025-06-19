@@ -1,13 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 class VagonetaBase(BaseModel):
     """Modelo base para registros de vagonetas"""
     numero: Optional[str] = Field(None, description="Número identificador de la vagoneta")
     confianza: Optional[float] = Field(None, description="Confianza de la detección de la placa", ge=0.0, le=1.0)
     imagen_path: str = Field(..., description="Ruta de la imagen almacenada")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Fecha y hora del evento")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Fecha y hora del evento")
     tunel: Optional[str] = Field(None, description="Identificador del túnel")
     evento: str = Field(..., description="Tipo de evento: 'ingreso' o 'egreso'")
     modelo_ladrillo: Optional[str] = Field(None, description="Modelo de ladrillo detectado o ingresado")

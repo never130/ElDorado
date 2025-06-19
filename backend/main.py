@@ -22,7 +22,7 @@ from datetime import datetime, timezone # MODIFIED: Added timezone
 from typing import List, Dict, Optional, Any
 
 import crud 
-from utils.image_processing import detectar_vagoneta_y_placa_mejorado, detectar_modelo_ladrillo 
+from utils.image_processing import run_detection_on_path, run_detection_on_frame
 from utils.auto_capture_system import AutoCaptureManager, load_cameras_config 
 from database import connect_to_mongo, close_mongo_connection, get_database 
 from collections import Counter # Keep if used elsewhere, not in provided snippets
@@ -112,13 +112,17 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
                 continue
 
             try:
-                # Assuming this function returns: cropped_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa
-                _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame) 
+                # --- NUEVA LÓGICA DE DETECCIÓN UNIFICADA ---
+                detection_results = run_detection_on_frame(frame)
+                numero_detectado = detection_results.get('numero_detectado')
+                confianza_numero = detection_results.get('confianza_numero')
+                modelo_ladrillo = detection_results.get('modelo_ladrillo')
+                # --- FIN DE LA NUEVA LÓGICA ---
                 
-                if numero_detectado and confianza_placa is not None:
+                if numero_detectado and confianza_numero is not None:
                     confianza_float = 0.0
                     try:
-                        confianza_float = float(confianza_placa)
+                        confianza_float = float(confianza_numero)
                     except (ValueError, TypeError):
                         pass # Keep confianza_float as 0.0 or log warning
 
@@ -127,7 +131,8 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
                         "stage": "frame_processing",
                         "frame": frame_count, 
                         "numero": numero_detectado, 
-                        "confianza": confianza_float 
+                        "confianza": confianza_float,
+                        "modelo": modelo_ladrillo
                     }
                     
                     # Guardar TODAS las detecciones significativas (no solo la mejor)
@@ -143,7 +148,8 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
                         detections[numero_detectado].append({
                             'confianza': confianza_float,
                             'frame': frame_count,
-                            'imagen_path': f"uploads/{frame_filename}"
+                            'imagen_path': f"uploads/{frame_filename}",
+                            'modelo_ladrillo': modelo_ladrillo
                         })
             except Exception as e_detect:
                 yield {"type": "warning", "stage": "frame_processing", "message": f"Error detectando en frame {frame_count}: {str(e_detect)}"}
@@ -171,6 +177,8 @@ def parse_merma(merma_str: Optional[str]) -> Optional[float]:
         return float(merma_str)
     except (ValueError, TypeError):
         return None
+
+live_frames: Dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
@@ -266,8 +274,12 @@ async def upload_image(
         with save_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Returns: cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza_placa
-        _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(str(save_path))
+        # --- NUEVA LÓGICA DE DETECCIÓN UNIFICADA ---
+        detection_results = run_detection_on_path(str(save_path))
+        numero_detectado = detection_results.get('numero_detectado')
+        modelo_ladrillo = detection_results.get('modelo_ladrillo')
+        confianza_numero = detection_results.get('confianza_numero')
+        # --- FIN DE LA NUEVA LÓGICA ---
         
         if not numero_detectado:
             try: os.remove(save_path)
@@ -276,7 +288,6 @@ async def upload_image(
                 {"message": "No se detectó vagoneta con número", "status": "ignored", "filename": file.filename},
                 status_code=200
             )
-        modelo_ladrillo = detectar_modelo_ladrillo(str(save_path))
         
         vagoneta_create_obj = VagonetaCreate(
             numero=str(numero_detectado),
@@ -287,7 +298,7 @@ async def upload_image(
             modelo_ladrillo=modelo_ladrillo,
             merma=parse_merma(merma),
             metadata=parsed_metadata,
-            confianza=float(confianza_placa) if confianza_placa is not None else None,
+            confianza=float(confianza_numero) if confianza_numero is not None else None,
             origen_deteccion="image_upload"
         )
         record_id = crud.create_vagoneta_record(vagoneta_create_obj)
@@ -304,7 +315,7 @@ async def upload_image(
         return {
             "message": "Registro creado exitosamente", "status": "ok", "record_id": str(record_id),
             "numero_detectado": numero_detectado, "modelo_ladrillo": modelo_ladrillo,
-            "confianza": confianza_placa, "filename": file.filename
+            "confianza": confianza_numero, "filename": file.filename
         }
 
     except Exception as e:
@@ -367,7 +378,12 @@ async def upload_files(
                 continue
 
             # Process if it's an image
-            _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(str(current_file_save_path))
+            # --- NUEVA LÓGICA DE DETECCIÓN UNIFICADA ---
+            detection_results = run_detection_on_path(str(current_file_save_path))
+            numero_detectado = detection_results.get('numero_detectado')
+            modelo_ladrillo = detection_results.get('modelo_ladrillo')
+            confianza_numero = detection_results.get('confianza_numero')
+            # --- FIN DE LA NUEVA LÓGICA ---
             
             if not numero_detectado:
                 if current_file_save_path.exists(): os.remove(current_file_save_path)
@@ -376,8 +392,6 @@ async def upload_files(
                     "message": "No se detectó vagoneta con número"
                 })
                 continue
-            
-            modelo_ladrillo = detectar_modelo_ladrillo(str(current_file_save_path))
             
             vagoneta_create_obj = VagonetaCreate(
                 numero=str(numero_detectado),
@@ -388,7 +402,7 @@ async def upload_files(
                 modelo_ladrillo=modelo_ladrillo,
                 merma=parse_merma(merma),
                 metadata=parsed_metadata,
-                confianza=float(confianza_placa) if confianza_placa is not None else None,
+                confianza=float(confianza_numero) if confianza_numero is not None else None,
                 origen_deteccion="image_upload_multiple"
             )
             record_id = crud.create_vagoneta_record(vagoneta_create_obj)
@@ -404,7 +418,7 @@ async def upload_files(
             results.append({
                 "filename": file.filename, "status": "ok", "record_id": str(record_id),
                 "numero_detectado": numero_detectado, "modelo_ladrillo": modelo_ladrillo,
-                "confianza": confianza_placa
+                "confianza": confianza_numero
             })
             
         except Exception as e:
@@ -475,7 +489,12 @@ async def finalize_upload(
     if is_image:
         try:
             print(f"🖼️  Procesando imagen ensamblada: {final_save_path}")
-            _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(str(final_save_path))
+            # --- NUEVA LÓGICA DE DETECCIÓN UNIFICADA ---
+            detection_results = run_detection_on_path(str(final_save_path))
+            numero_detectado = detection_results.get('numero_detectado')
+            modelo_ladrillo = detection_results.get('modelo_ladrillo')
+            confianza_numero = detection_results.get('confianza_numero')
+            # --- FIN DE LA NUEVA LÓGICA ---
             
             if not numero_detectado:
                 if final_save_path.exists(): os.remove(final_save_path)
@@ -483,7 +502,6 @@ async def finalize_upload(
                     content={"message": f"No se detectó vagoneta con número en {originalFilename}", "status": "ignored", "filename": originalFilename},
                     status_code=200
                 )
-            modelo_ladrillo = detectar_modelo_ladrillo(str(final_save_path))
 
             vagoneta_data = VagonetaCreate(
                 numero=str(numero_detectado),
@@ -494,7 +512,7 @@ async def finalize_upload(
                 modelo_ladrillo=modelo_ladrillo,
                 merma=parse_merma(merma),
                 metadata=metadata,
-                confianza=float(confianza_placa) if confianza_placa is not None else None,
+                confianza=float(confianza_numero) if confianza_numero is not None else None,
                 origen_deteccion="image_chunk_upload"
             )
             record_id = crud.create_vagoneta_record(vagoneta_data)
@@ -510,7 +528,7 @@ async def finalize_upload(
             response_data = {
                 "filename": originalFilename, "status": "ok", "record_id": str(record_id),
                 "numero_detectado": numero_detectado, "modelo_ladrillo": modelo_ladrillo,
-                "confianza": confianza_placa, "message": f"File {originalFilename} processed and record created successfully."
+                "confianza": confianza_numero, "message": f"File {originalFilename} processed and record created successfully."
             }
             return JSONResponse(content=response_data)
         except Exception as e:
@@ -715,7 +733,7 @@ async def stream_video_processing(processing_id: str):
 async def get_historial_registros(
     skip: int = 0, 
     limit: int = 100,
-    sort_by: Optional[str] = Query("timestamp", enum=["timestamp", "numero_detectado", "confianza", "origen_deteccion"]),
+    sort_by: Optional[str] = Query("timestamp", enum=["timestamp", "numero", "confianza", "origen_deteccion"]),
     sort_order: Optional[int] = Query(-1, enum=[-1, 1]),
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
@@ -723,80 +741,61 @@ async def get_historial_registros(
     db = Depends(get_database)
 ):
     if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
-        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)    # Fixed function call to match crud.get_vagonetas_historial signature
-    registros_from_db = crud.get_vagonetas_historial(
-        skip=skip, 
-        limit=limit
-        # Note: The current crud function doesn't support filtering by sort_by, sort_order, 
-        # filtro, fecha_inicio, fecha_fin - these need to be implemented later
-    )    
+        fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    registros_from_db, total_registros = crud.get_vagonetas_historial_with_filters(
+        db=db,
+        skip=skip,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filtro=filtro,
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin
+    )
+
     registros_list = []
-    # get_vagonetas_historial returns a list, not a cursor, so iterate normally
     for r_doc in registros_from_db:
-        doc_data = dict(r_doc) 
-
-        # 1. Handle 'id' from '_id'
-        if "_id" in doc_data and isinstance(doc_data["_id"], ObjectId):
-            doc_data["id"] = str(doc_data["_id"])
-        
-        # 2. Handle 'timestamp' (required by schema, assumed datetime)
-        ts = doc_data.get('timestamp')
-        if not isinstance(ts, datetime):
-            if isinstance(ts, str):
-                try:
-                    ts = datetime.fromisoformat(ts)
-                except ValueError:
-                    ts = datetime.now(timezone.utc) # Fallback
-            else:
-                ts = datetime.now(timezone.utc) # Fallback
-        
-        if ts.tzinfo is None: # Ensure timezone-aware
-            ts = ts.replace(tzinfo=timezone.utc)
-        doc_data['timestamp'] = ts        # 3. Handle 'numero_detectado' (required by schema, assumed str)
-        # Map from 'numero' field in old schema to 'numero_detectado' in new schema
-        doc_data['numero_detectado'] = str(doc_data.get('numero', 'N/A'))
-
-        # 4. Handle 'confianza' (required by schema, assumed float)
-        conf = doc_data.get('confianza')
         try:
-            doc_data['confianza'] = float(conf if conf is not None else 0.0)
-        except (ValueError, TypeError):
-            doc_data['confianza'] = 0.0        # 5. Handle 'origen_deteccion' (required by schema, assumed str)
-        # Since this is a new field, set a default value
-        doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'historico'))
+            doc_data = dict(r_doc)
 
-        # 6. Handle 'evento' (required by schema, assumed str)
-        doc_data['evento'] = str(doc_data.get('evento', 'desconocido'))
-          # 7. Handle 'tunel' (required by schema, assumed str)
-        doc_data['tunel'] = str(doc_data.get('tunel', 'N/A')) if doc_data.get('tunel') is not None else None
+            if "_id" in doc_data and isinstance(doc_data["_id"], ObjectId):
+                doc_data["id"] = str(doc_data["_id"])
 
-        # 8. Handle 'merma' field - convert to string if it exists
-        merma_val = doc_data.get('merma')
-        if merma_val is not None:
-            doc_data['merma'] = str(merma_val)
-        else:
-            doc_data['merma'] = None        # 9. Optional fields (defaults to None if not present, Pydantic handles Optional types)
-        doc_data['imagen_path'] = doc_data.get('imagen_path')
-        doc_data['url_video_frame'] = doc_data.get('url_video_frame')
-        doc_data['ruta_video_original'] = doc_data.get('ruta_video_original')
+            ts = doc_data.get('timestamp')
+            if not isinstance(ts, datetime):
+                if isinstance(ts, str):
+                    try:
+                        ts = datetime.fromisoformat(ts)
+                    except ValueError:
+                        ts = datetime.now(timezone.utc)
+                else:
+                    ts = datetime.now(timezone.utc)
+            
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            doc_data['timestamp'] = ts
 
-        # Ensure all fields required by RegistroHistorialDisplay are present
-        # The .get with defaults above should cover required string/float/datetime fields.
-        # Optional fields will be None if missing, which is fine for Pydantic.
-        
-        try:
-            # Create the Pydantic model instance
+            doc_data['numero_detectado'] = str(doc_data.get('numero', 'N/A'))
+
+            try:
+                doc_data['confianza'] = float(doc_data.get('confianza', 0.0))
+            except (ValueError, TypeError):
+                doc_data['confianza'] = 0.0
+
+            doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'historico'))
+            doc_data['evento'] = str(doc_data.get('evento', 'desconocido'))
+            doc_data['tunel'] = str(doc_data.get('tunel')) if doc_data.get('tunel') is not None else None
+            doc_data['merma'] = str(doc_data.get('merma')) if doc_data.get('merma') is not None else None
+
+            doc_data['imagen_path'] = doc_data.get('imagen_path')
+            doc_data['modelo_ladrillo'] = doc_data.get('modelo_ladrillo')
+            
             registro_display = RegistroHistorialDisplay(**doc_data)
             registros_list.append(registro_display)
-        except Exception as e: # Catch Pydantic validation errors or others
-            print(f"Error converting document to RegistroHistorialDisplay: {doc_data}")
-            print(f"Validation/Conversion Error: {e}")
-            # Optionally, skip this record or handle error appropriately
-            # For now, this will prevent the request from failing entirely if one doc is bad.
-            # Consider if a bad record should raise an HTTP error or be skipped.    # Fixed function call - no await needed since function is now synchronous
-    total_registros = crud.get_vagonetas_historial_count(
-        filtro=filtro, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin
-    )
+        except Exception as e:
+            print(f"Error al procesar el documento: {r_doc}")
+            print(f"Error: {e}")
 
     return HistorialResponse(
         registros=registros_list,
@@ -983,7 +982,7 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         print(f"🎥 Iniciando monitoreo para cámara {camera_id} (URL: {camera_url})")
 
         if isinstance(camera_url, (int, str)) and str(camera_url).isdigit():
-            cap = cv2.VideoCapture(int(camera_url))
+            cap = cv2.VideoCapture(int(camera_url), cv2.CAP_DSHOW)
         else:
             cap = cv2.VideoCapture(str(camera_url))
 
@@ -1006,14 +1005,14 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         last_time = time.time()
         fps = 0
         print(f"✅ Cámara conectada (Resolución: {frame_width}x{frame_height})")
-
+        
         while True:
             try:
                 ret, frame = cap.read()
                 if not ret:
                     await asyncio.sleep(0.1)
                     continue
-
+                
                 frame_count += 1
                 current_time = time.time()
                 elapsed = current_time - last_time
@@ -1032,343 +1031,64 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                         }
                     })
 
+                # Realizar detección en algunos frames (cada 30 frames, aproximadamente 1-2 segundos)
                 if frame_count % 30 == 0:
-                    await manager.broadcast_json({
-                        "type": "detection",
-                        "data": {
-                            "camera_id": camera_id,
-                            "timestamp": datetime.now().isoformat(),
-                            "fps": round(fps, 1)
-                        }
-                    })
-
-                await asyncio.sleep(0.01)
+                    # Procesar el frame para detección
+                    try:
+                        # --- NUEVA LÓGICA DE DETECCIÓN UNIFICADA ---
+                        detection_results = run_detection_on_frame(frame)
+                        numero_detectado = detection_results.get('numero_detectado')
+                        modelo_ladrillo = detection_results.get('modelo_ladrillo')
+                        confianza_numero = detection_results.get('confianza_numero')
+                        # --- FIN DE LA NUEVA LÓGICA ---
+                        
+                        if numero_detectado and confianza_numero is not None:
+                            if confianza_numero >= 0.5:
+                                # Guardar imagen del frame
+                                timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+                                frame_filename = f"detection_frame_{camera_id}_{timestamp_str}.jpg"
+                                frame_path = UPLOAD_DIR / frame_filename
+                                cv2.imwrite(str(frame_path), frame)
+                                
+                                # Crear registro en base de datos
+                                vagoneta_create_obj = VagonetaCreate(
+                                    numero=str(numero_detectado),
+                                    imagen_path=f"uploads/{frame_filename}",
+                                    timestamp=datetime.now(timezone.utc),
+                                    tunel=camera_config.get("tunel"),
+                                    evento="deteccion_automatica",
+                                    modelo_ladrillo=modelo_ladrillo,
+                                    merma=None,
+                                    metadata={"camera_id": camera_id, "fps": fps},
+                                    confianza=float(confianza_numero),
+                                    origen_deteccion="live_camera"
+                                )
+                                record_id = crud.create_vagoneta_record(vagoneta_create_obj)
+                                
+                                # Notificar a los clientes WebSocket
+                                db_record_dict = vagoneta_create_obj.dict()
+                                db_record_dict["_id"] = str(record_id)
+                                db_record_dict["id"] = str(record_id)
+                                db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+                                
+                                await manager.broadcast_json({
+                                    "type": "new_detection",
+                                    "data": db_record_dict
+                                })
+                    except Exception as e:
+                        print(f"Error en detección de cámara {camera_id}: {e}")                
+                # Almacenar frame para streaming
+                live_frames[camera_id] = frame
+                
+                await asyncio.sleep(0.05)  # Control de FPS
+                
             except Exception as e:
-                print(f"❌ Error en frame: {e}")
-                await asyncio.sleep(0.1)
-    except asyncio.CancelledError:
-        print(f"🛑 Monitor cancelado: {camera_id}")
+                print(f"Error en loop de monitoreo para cámara {camera_id}: {e}")
+                await asyncio.sleep(1)
+                
     except Exception as e:
-        print(f"❌ Error: {e}")
-        raise
+        print(f"💥 Error crítico en monitor de cámara {camera_id}: {e}")
     finally:
         if cap:
             cap.release()
-            print(f"📹 Cámara liberada: {camera_id}")
-
-@app.get("/cameras/system-info")
-async def get_system_cameras_info():
-    """Obtener información detallada de las cámaras del sistema - OPTIMIZADO"""
-    try:
-        import cv2
-        system_cameras = []
-        
-        print("🔍 Escaneando cámaras del sistema (rango optimizado 0-2)...")
-        
-        # Reducir rango a 0-2 para máxima velocidad
-        for i in range(3):
-            cap = None
-            try:
-                print(f"  📷 Probando cámara índice {i}...")
-                
-                # Usar DirectShow en Windows para conexión más rápida
-                cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
-                
-                # Timeouts muy agresivos para velocidad máxima
-                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 800)   # 0.8 segundos
-                cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 400)   # 0.4 segundos
-                
-                if cap.isOpened():
-                    # Intentar leer frame rápidamente
-                    ret, frame = cap.read()
-                    if ret and frame is not None:
-                        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-                        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-                        fps = cap.get(cv2.CAP_PROP_FPS)
-                        
-                        system_cameras.append({
-                            "index": i,
-                            "width": int(width) if width > 0 else "Desconocido",
-                            "height": int(height) if height > 0 else "Desconocido", 
-                            "fps": int(fps) if fps > 0 else "Desconocido",
-                            "status": "Disponible y funcional"
-                        })
-                        print(f"    ✅ Cámara {i}: Funcional ({int(width)}x{int(height)})")
-                    else:
-                        system_cameras.append({
-                            "index": i,
-                            "width": "N/A",
-                            "height": "N/A", 
-                            "fps": "N/A",
-                            "status": "Detectada pero no funcional"
-                        })
-                        print(f"    ⚠️ Cámara {i}: No funcional")
-                else:
-                    print(f"    ❌ Cámara {i}: No disponible")
-                    
-            except Exception as e:
-                print(f"    💥 Cámara {i}: Error - {str(e)[:50]}...")
-                # Continuar silenciosamente para no spam
-            finally:
-                if cap:
-                    cap.release()
-        
-        print(f"✅ Escaneo completado: {len(system_cameras)} cámaras encontradas")
-        
-        # Información de configuración actual
-        config_cameras = []
-        for camera in CAMERAS_CONFIG:
-            config_cameras.append({
-                "camera_id": camera["camera_id"],
-                "camera_url": camera["camera_url"],
-                "tunel": camera.get("tunel", "Sin nombre"),
-                "source_type": camera.get("source_type", "camera"),
-                "demo_mode": camera.get("demo_mode", False),
-                "currently_monitoring": camera["camera_id"] in monitor_tasks
-            })
-        
-        return {
-            "system_cameras": system_cameras,
-            "configured_cameras": config_cameras,
-            "total_system_cameras": len(system_cameras),
-            "active_monitors": len(monitor_tasks),
-            "scan_range": "0-2 (ultra-optimizado para velocidad máxima)",
-            "scan_method": "DirectShow + timeouts agresivos"
-        }
-        
-    except Exception as e:
-        print(f"❌ Error en get_system_cameras_info: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error obteniendo información del sistema: {str(e)}")
-
-@app.get("/cameras/test/{camera_index}")
-async def test_specific_camera(camera_index: int):
-    """Verificar rápidamente si una cámara específica está disponible"""
-    try:
-        import cv2
-        
-        print(f"🔍 Probando cámara índice {camera_index}...")
-        
-        # Verificación ultra-rápida
-        cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-        cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 500)  # 0.5 segundos
-        cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 200)  # 0.2 segundos
-        
-        if cap.isOpened():
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                
-                result = {
-                    "index": camera_index,
-                    "available": True,
-                    "functional": True,
-                    "width": width,
-                    "height": height,
-                    "test_time": "< 1 segundo"
-                }
-                print(f"✅ Cámara {camera_index}: Funcional ({width}x{height})")
-            else:
-                result = {
-                    "index": camera_index,
-                    "available": True,
-                    "functional": False,
-                    "width": None,
-                    "height": None,
-                    "test_time": "< 1 segundo"
-                }
-                print(f"⚠️ Cámara {camera_index}: Detectada pero no funcional")
-        else:
-            result = {
-                "index": camera_index,
-                "available": False,
-                "functional": False,
-                "width": None,
-                "height": None,
-                "test_time": "< 1 segundo"
-            }
-            print(f"❌ Cámara {camera_index}: No disponible")
-        
-        cap.release()
-        return result
-        
-    except Exception as e:
-        print(f"💥 Error probando cámara {camera_index}: {str(e)}")
-        return {
-            "index": camera_index,
-            "available": False,
-            "functional": False,
-            "error": str(e),
-            "test_time": "< 1 segundo"
-        }
-
-@app.get("/cameras/capture-frame/{camera_id}")
-async def capture_frame_from_camera(camera_id: str):
-    """Capturar un frame actual de la cámara para debugging"""
-    try:
-        # Encontrar configuración de la cámara
-        camera_config = None
-        for cam in CAMERAS_CONFIG:
-            if cam["camera_id"] == camera_id:
-                camera_config = cam
-                break
-        
-        if not camera_config:
-            raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
-        
-        camera_url = camera_config["camera_url"]
-        
-        # Abrir cámara temporalmente
-        if camera_config["source_type"] == "camera":
-            cap = cv2.VideoCapture(int(camera_url), cv2.CAP_DSHOW)
-        else:
-            cap = cv2.VideoCapture(camera_url)
-            
-        if not cap.isOpened():
-            raise HTTPException(status_code=500, detail=f"No se pudo abrir la cámara {camera_id}")
-        
-        # Capturar frame
-        ret, frame = cap.read()
-        cap.release()
-        
-        if not ret or frame is None:
-            raise HTTPException(status_code=500, detail=f"No se pudo capturar frame de cámara {camera_id}")
-        
-        # Guardar frame temporalmente
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        frame_filename = f"debug_frame_{camera_id}_{timestamp_str}.jpg"
-        frame_path = UPLOAD_DIR / frame_filename
-        cv2.imwrite(str(frame_path), frame)
-        
-        # Intentar detección en el frame capturado para debugging
-        try:
-            _, _, _, numero_detectado, confianza_placa = detectar_vagoneta_y_placa_mejorado(frame)
-            detection_result = {
-                "numero_detectado": numero_detectado,
-                "confianza": float(confianza_placa) if confianza_placa else None
-            }
-        except Exception as e_detect:
-            detection_result = {
-                "error": f"Error en detección: {str(e_detect)}"
-            }
-        
-        return {
-            "camera_id": camera_id,
-            "frame_captured": True,
-            "frame_path": f"/uploads/{frame_filename}",
-            "frame_size": {
-                "width": frame.shape[1],
-                "height": frame.shape[0]
-            },
-            "detection_test": detection_result,
-            "timestamp": timestamp_str
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"💥 Error capturando frame de cámara {camera_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-# Agregar endpoint para debug de monitoreo
-@app.get("/monitor/debug/{camera_id}")
-async def get_monitor_debug_info(camera_id: str):
-    """Obtener información de debug del monitoreo de una cámara"""
-    active_task = monitor_tasks.get(camera_id)
-    
-    if not active_task:
-        return {
-            "camera_id": camera_id,
-            "is_monitoring": False,
-            "error": "No hay tarea de monitoreo activa"
-        }
-    
-    # Info básica de la tarea
-    task_info = {
-        "camera_id": camera_id,
-        "is_monitoring": True,
-        "task_done": active_task.done(),
-        "task_cancelled": active_task.cancelled()
-    }
-    
-    if active_task.done():
-        try:
-            exception = active_task.exception()
-            if exception:
-                task_info["task_exception"] = str(exception)
-        except:
-            pass
-    
-    return task_info
-
-# Esta línea se eliminó para corregir indentación
-       
-
-@app.get("/video/stream/{camera_id}")
-async def video_stream(camera_id: str):
-    """Stream de video en vivo desde una cámara"""
-    try:
-        # Si la cámara es la webcam (camera_id == "webcam"), usar índice 0
-        if camera_id == "webcam":
-            cap = cv2.VideoCapture(0)
-        else:
-            # Buscar la configuración de la cámara
-            cameras = load_cameras_config()
-            camera_config = next((c for c in cameras if c["camera_id"] == camera_id), None)
-            if not camera_config:
-                raise HTTPException(status_code=404, detail=f"Cámara {camera_id} no encontrada")
-                
-            cap = cv2.VideoCapture(camera_config["camera_url"])
-            
-        if not cap.isOpened():
-            raise HTTPException(status_code=500, detail="No se pudo abrir la cámara")
-            
-        # Configurar resolución preferida
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
-        async def generate_frames():
-            try:
-                while True:
-                    success, frame = cap.read()
-                    if not success:
-                        break
-                        
-                    # Codificar frame a JPEG
-                    ret, buffer = cv2.imencode('.jpg', frame)
-                    if not ret:
-                        continue
-                        
-                    # Convertir a bytes y enviar
-                    frame_bytes = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                    
-                    # Pequeña pausa para controlar FPS
-                    await asyncio.sleep(0.033)  # ~30 FPS
-                    
-            except Exception as e:
-                print(f"Error en generate_frames: {e}")
-            finally:
-                cap.release()
-                
-        return StreamingResponse(
-            generate_frames(),
-            media_type='multipart/x-mixed-replace; boundary=frame'
-        )
-        
-    except Exception as e:
-        print(f"Error en video_stream: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Inicialización del servidor
-if __name__ == "__main__":
-    import uvicorn
-    print("🚀 Iniciando servidor FastAPI...")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+        print(f"� Liberando recursos de cámara {camera_id}")

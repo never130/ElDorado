@@ -85,349 +85,121 @@ class ImageProcessor:
         # Volver a BGR para YOLO
         return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
 
-    def detect_objects(self, image: np.ndarray) -> Dict[str, Any]:
-        """Detecta vagoneta, placa y modelo de ladrillo en la imagen"""
-        if image is None:
-            print("❌ Error Crítico: ImageProcessor.detect_objects recibió una imagen None.")
-            # Devuelve detecciones vacías para evitar más errores si esto ocurre.
-            return {'vagoneta': None, 'placa': None, 'ladrillo': None}
+    def detect_objects_unified(self, image: np.ndarray, umbral_agrupacion: int = 50) -> Dict[str, Any]:
+        """
+        Función unificada que detecta todos los objetos de interés en una sola pasada del modelo.
+        Detecta: vagoneta, número de vagoneta (agrupando dígitos), y tipo de ladrillo.
+        """
+        if image is None or image.size == 0:
+            print("❌ Error: Imagen de entrada es None o está vacía en detect_objects_unified.")
+            return {}
 
-        # Preprocesar imagen
+        # 1. Ejecutar el modelo UNA SOLA VEZ
         processed_image = self.preprocess_image(image)
+        results = self.model(processed_image, conf=self.min_confidence)
+
+        if not results or not results[0].boxes:
+            return {}
         
-        # Realizar detección con YOLOv8
-        results = self.model(processed_image)[0]
-        detections = {
-            'vagoneta': None,
-            'placa': None,
-            'ladrillo': None
+        results_obj = results[0] # Main result object
+
+        # 2. Agrupar los dígitos para formar el número de vagoneta
+        _, numero_compuesto, info_numero = detectar_numero_compuesto_desde_resultados(
+            results, 
+            image.copy(), 
+            umbral_agrupacion
+        )
+
+        final_result = {
+            'numero_detectado': None,
+            'confianza_numero': None,
+            'bbox_numero': None,
+            'modelo_ladrillo': None,
+            'confianza_ladrillo': None,
+            'bbox_ladrillo': None,
+            'bbox_vagoneta': None,
+            'confianza_vagoneta': None,
         }
 
-        # Procesar resultados
-        for box in results.boxes:
-            confidence = float(box.conf[0])
-            if confidence < self.min_confidence:
-                continue
+        if numero_compuesto and info_numero:
+            final_result['numero_detectado'] = numero_compuesto
+            final_result['confianza_numero'] = info_numero.get('confidence')
+            final_result['bbox_numero'] = info_numero.get('bbox')
 
+        # 3. Extraer detecciones de ladrillo y vagoneta del MISMO resultado
+        best_ladrillo = None
+        best_vagoneta = None
+
+        for box in results_obj.boxes:
+            confidence = float(box.conf[0])
             class_id = int(box.cls[0])
-            class_name = results.names[class_id]
+            class_name = results_obj.names[class_id]
             bbox = box.xyxy[0].cpu().numpy()
-            
-            detection_info = {'bbox': bbox, 'confidence': confidence}
+
+            if 'ladrillo' in class_name:
+                if best_ladrillo is None or confidence > best_ladrillo['confidence']:
+                    best_ladrillo = {
+                        'tipo': class_name,
+                        'confidence': confidence,
+                        'bbox': bbox
+                    }
 
             if class_name == 'vagoneta':
-                detections['vagoneta'] = detection_info
-            elif class_name == 'placa':
-                detections['placa'] = detection_info
-            elif 'ladrillo' in class_name: # Asumiendo que ladrillo también podría querer confianza
-                detections['ladrillo'] = {
-                    'bbox': bbox,
-                    'tipo': class_name,
-                    'confidence': confidence
-                }
-        return detections
-
-    def process_frame(self, frame: np.ndarray) -> Optional[Dict[str, Any]]:
-        """Procesa un frame y retorna la información detectada"""
-        # Detectar objetos
-        detections = self.detect_objects(frame)
+                 if best_vagoneta is None or confidence > best_vagoneta['confidence']:
+                    best_vagoneta = {
+                        'confidence': confidence,
+                        'bbox': bbox
+                    }
         
-        if not detections['placa']:
-            return None
+        if best_ladrillo:
+            final_result['modelo_ladrillo'] = best_ladrillo['tipo']
+            final_result['confianza_ladrillo'] = best_ladrillo['confidence']
+            final_result['bbox_ladrillo'] = best_ladrillo['bbox']
 
-        # Extraer y procesar número de placa
-        placa_bbox = detections['placa']
-        placa_image = frame[
-            int(placa_bbox[1]):int(placa_bbox[3]),
-            int(placa_bbox[0]):int(placa_bbox[2])
-        ]
-        numero = extract_number_from_image(placa_image)
+        if best_vagoneta:
+            final_result['bbox_vagoneta'] = best_vagoneta['bbox']
+            final_result['confianza_vagoneta'] = best_vagoneta['confidence']
 
-        if not numero:
-            return None
-
-        # Preparar resultado
-        result = {
-            'numero': numero,
-            'confidence': float(detections['placa'][4]) if len(detections['placa']) > 4 else 0.0,
-            'bbox': detections['placa'].tolist(),
-        }        # Agregar información del modelo de ladrillo si se detectó
-        if detections['ladrillo']:
-            result['modelo_ladrillo'] = detections['ladrillo']['tipo']
-        
-        self.last_detection = result
-        return result
+        self.last_detection = final_result # Update last detection
+        return final_result
 
     def get_last_detection(self) -> Optional[Dict[str, Any]]:
         """Retorna la última detección exitosa"""
         return self.last_detection
 
-    def detect_calado_numbers_mejorado(self, image: np.ndarray, umbral_agrupacion: int = 50) -> Optional[Dict[str, Any]]:
-        """
-        Versión mejorada que detecta y agrupa números individuales en números compuestos.
-        Integra la lógica del código de Colab con tu modelo existente.
-        """
-        try:
-            # Verificar que la imagen es válida
-            if image is None:
-                print("❌ Error: imagen es None")
-                return None
-                
-            if not hasattr(image, 'ndim') or image.ndim != 3:
-                print(f"❌ Error: imagen inválida, ndim = {getattr(image, 'ndim', 'N/A')}")
-                return None
-                
-            if image.size == 0:
-                print("❌ Error: imagen vacía")
-                return None
-            
-            # Aplicar tu modelo actual de números enteros
-            results = self.model(image, conf=self.min_confidence)
-            
-            if not results or not results[0].boxes:
-                return None
-            
-            # Usar la nueva función de agrupación
-            frame_procesado, numero_compuesto, info_deteccion = detectar_numero_compuesto_desde_resultados(
-                results, 
-                image.copy(), 
-                umbral_agrupacion
-            )
-            
-            if numero_compuesto and info_deteccion:
-                # Analizar calidad de la detección
-                analisis_calidad = analizar_calidad_deteccion(info_deteccion)
-                
-                # Agregar información adicional
-                info_deteccion.update({
-                    'numero': numero_compuesto,
-                    'calidad': analisis_calidad,
-                    'frame_procesado': frame_procesado is not None
-                })
-                
-                self.last_detection = info_deteccion
-                return info_deteccion
-            
-            return None
-            
-        except Exception as e:
-            print(f"❌ Error en detect_calado_numbers_mejorado: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    def detect_calado_numbers(self, image: np.ndarray) -> Optional[Dict[str, Any]]:
-        """
-        Función original mantenida como fallback
-        """
-        if image is None:
-            print("❌ Error Crítico: ImageProcessor.detect_calado_numbers recibió una imagen None.")
-            return None
-        try:
-            results = self.model(image, conf=self.min_confidence)[0]
-            
-            # Verificar si hay detecciones válidas
-            if results.boxes is None or len(results.boxes.xyxy) == 0:
-                return None
-            
-            # Obtener la mejor detección (mayor confianza)
-            best_idx = torch.argmax(results.boxes.conf)
-            best_box = results.boxes.xyxy[best_idx]
-            best_conf = results.boxes.conf[best_idx]
-            best_cls = results.boxes.cls[best_idx]
-            
-            # Extraer coordenadas del bounding box
-            x1, y1, x2, y2 = map(int, best_box)
-            
-            # Recortar la región de la placa
-            cropped_image = image[y1:y2, x1:x2]
-            
-            if cropped_image.size == 0:
-                return None
-            
-            # Aplicar OCR usando tu función existente
-            numero_detectado = extract_number_from_image(cropped_image)
-            
-            if numero_detectado:
-                return {
-                    'numero': numero_detectado,
-                    'confidence': float(best_conf),
-                    'bbox': (x1, y1, x2, y2),
-                    'class_id': int(best_cls),
-                    'cropped_image': cropped_image
-                }
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error en detect_calado_numbers: {e}")
-            return None
-       
-
 # Inicializar el procesador como singleton
 processor = ImageProcessor()
 
-def process_image(image: np.ndarray) -> Optional[Dict[str, Any]]:
-    """Función auxiliar para procesar una imagen"""
-    return processor.process_frame(image)
-
-def detectar_vagoneta_y_placa(image_data: np.ndarray) -> tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray], Optional[str], Optional[float]]:
+def run_detection_on_path(image_path: str) -> Dict[str, Any]:
     """
-    Detecta la vagoneta, la placa, extrae el número de la placa, la imagen recortada de la placa y la confianza de detección de la placa.
-
-    Args:
-        image_data (np.ndarray): Imagen a procesar (NumPy array).
-
-    Returns:
-        tuple: (cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza)
-               - cropped_placa_img (np.ndarray): Imagen recortada de la placa (or placeholder).
-               - bbox_vagoneta (Optional[np.ndarray]): Bounding box de la vagoneta.
-               - bbox_placa (Optional[np.ndarray]): Bounding box de la placa.
-               - numero_detectado (Optional[str]): Número de placa detectado.
-               - confianza_placa (Optional[float]): Confianza de la detección de la placa.
-    """
-    image = image_data 
-    if image is None or not hasattr(image, 'size') or image.size == 0: 
-        print(f"Error: Imagen de entrada es None, no es un array numpy válido o está vacía en detectar_vagoneta_y_placa.")
-        return _PLACEHOLDER_CROPPED_IMAGE, None, None, None, None
-
-    detections = processor.detect_objects(image)
-
-    bbox_vagoneta_info = detections.get('vagoneta')
-    bbox_placa_info = detections.get('placa')
-    
-    bbox_vagoneta = bbox_vagoneta_info['bbox'] if bbox_vagoneta_info else None
-    bbox_placa_coords = bbox_placa_info['bbox'] if bbox_placa_info else None
-    placa_confidence = bbox_placa_info['confidence'] if bbox_placa_info else None
-    
-    actual_cropped_placa_img = None
-    numero_detectado = None
-
-    if bbox_placa_coords is not None:
-        placa_y_start, placa_y_end = int(bbox_placa_coords[1]), int(bbox_placa_coords[3])
-        placa_x_start, placa_x_end = int(bbox_placa_coords[0]), int(bbox_placa_coords[2])
-        
-        placa_y_start = max(0, placa_y_start)
-        placa_x_start = max(0, placa_x_start)
-        placa_y_end = min(image.shape[0], placa_y_end)
-        placa_x_end = min(image.shape[1], placa_x_end)
-
-        if placa_y_start < placa_y_end and placa_x_start < placa_x_end:
-            placa_image_cropped = image[placa_y_start:placa_y_end, placa_x_start:placa_x_end]
-            if placa_image_cropped.size > 0:
-                actual_cropped_placa_img = placa_image_cropped
-                numero_detectado = extract_number_from_image(actual_cropped_placa_img)
-            else:
-                print(f"Advertencia: El recorte de la placa resultó en una imagen vacía.")
-        else:
-            print(f"Advertencia: Coordenadas de recorte de placa inválidas.")
-            
-    return (actual_cropped_placa_img if actual_cropped_placa_img is not None else _PLACEHOLDER_CROPPED_IMAGE), \
-           bbox_vagoneta, bbox_placa_coords, numero_detectado, placa_confidence
-
-def detectar_modelo_ladrillo(image_path: str) -> Optional[str]:
-    """
-    Detecta el modelo de ladrillo en la imagen.
+    Función principal para ejecutar la detección unificada en una imagen desde una ruta.
+    Carga una imagen, la procesa y devuelve todos los objetos detectados.
 
     Args:
         image_path (str): Ruta a la imagen a procesar.
 
     Returns:
-        Optional[str]: El tipo de modelo de ladrillo detectado, o None si no se detecta.
+        Dict[str, Any]: Un diccionario con los resultados de la detección.
     """
     image = cv2.imread(image_path)
     if image is None:
         print(f"Error: No se pudo cargar la imagen desde {image_path}")
-        return None
+        return {}
     
-    detections = processor.detect_objects(image)
-    
-    ladrillo_info = detections.get('ladrillo')
-    if ladrillo_info and 'tipo' in ladrillo_info:
-        return ladrillo_info['tipo']
-    return None
+    return processor.detect_objects_unified(image)
 
-def detectar_vagoneta_y_placa_mejorado(image_data: np.ndarray, usar_agrupacion: bool = True) -> tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray], Optional[str], Optional[float]]:
+def run_detection_on_frame(frame: np.ndarray) -> Dict[str, Any]:
     """
-    Versión mejorada que integra agrupación de números compuestos y devuelve confianza.
-    
+    Función principal para ejecutar la detección unificada en un frame (np.ndarray).
+
     Args:
-        image_data (np.ndarray): Imagen a procesar (NumPy array).
-        usar_agrupacion (bool): Si usar agrupación de números compuestos
+        frame (np.ndarray): El frame de video a procesar.
+
     Returns:
-        tuple: (cropped_placa_img, bbox_vagoneta, bbox_placa, numero_detectado, confianza)
-               - cropped_placa_img (np.ndarray): Imagen recortada de la placa (or placeholder).
-               - bbox_vagoneta (Optional[np.ndarray]): Bounding box de la vagoneta.
-               - bbox_placa (Optional[np.ndarray]): Bounding box de la placa.
-               - numero_detectado (Optional[str]): Número de placa detectado.
-               - confianza (Optional[float]): Confianza de la detección.
+        Dict[str, Any]: Un diccionario con los resultados de la detección.
     """
-    try:
-        image = image_data 
-
-        if image is None or not isinstance(image, np.ndarray): 
-            print(f"❌ Error: image_data es None o no es un array numpy en detectar_vagoneta_y_placa_mejorado")
-            return _PLACEHOLDER_CROPPED_IMAGE, None, None, None, None
-            
-        if not hasattr(image, 'ndim') or image.ndim != 3: 
-            print(f"❌ Error: imagen inválida (ndim != 3), ndim = {getattr(image, 'ndim', 'N/A')}")
-            return _PLACEHOLDER_CROPPED_IMAGE, None, None, None, None
-            
-        if image.size == 0:
-            print(f"❌ Error: imagen vacía") 
-            return _PLACEHOLDER_CROPPED_IMAGE, None, None, None, None
-
-        if usar_agrupacion:
-            resultado = processor.detect_calado_numbers_mejorado(image) 
-            
-            if resultado and resultado.get('numero'):
-                bbox_placa_from_resultado = resultado.get('bbox')
-                numero_detectado = resultado.get('numero')
-                confianza = resultado.get('confidence') # Clave 'confidence' según el log
-                
-                actual_cropped_placa_img = None
-                bbox_vagoneta = None
-
-                if bbox_placa_from_resultado is not None:
-                    x1, y1, x2, y2 = map(int, bbox_placa_from_resultado)
-                    x1, y1 = max(0, x1), max(0, y1)
-                    x2 = min(image.shape[1], x2)
-                    y2 = min(image.shape[0], y2)
-                    
-                    if y1 < y2 and x1 < x2:
-                        actual_cropped_placa_img = image[y1:y2, x1:x2]
-                    
-                try:
-                    detections_obj = processor.detect_objects(image) # Renamed to avoid conflict
-                    vagoneta_info = detections_obj.get('vagoneta')
-                    if vagoneta_info:
-                        bbox_vagoneta = vagoneta_info['bbox']
-                except Exception as det_error:
-                    print(f"⚠️ Error detectando vagoneta: {det_error}")
-                
-                print(f"✅ Detección mejorada: {numero_detectado} (confianza: {confianza if confianza is not None else 'N/A'}, calidad: {resultado.get('calidad', {}).get('calidad', 'N/A')})")
-                
-                return (actual_cropped_placa_img if actual_cropped_placa_img is not None else _PLACEHOLDER_CROPPED_IMAGE), \
-                       bbox_vagoneta, \
-                       (np.array(bbox_placa_from_resultado) if bbox_placa_from_resultado is not None else None), \
-                       numero_detectado, \
-                       confianza
-            
-            print("⚠️ No se detectó número con agrupación, intentando método original...")
-            # Fallback ahora devuelve 5 elementos
-            return detectar_vagoneta_y_placa(image) 
+    if frame is None or frame.size == 0:
+        print("Error: El frame de entrada está vacío o es None.")
+        return {}
         
-        # Si no usar_agrupacion, llamar al método original (que ahora también devuelve 5 elementos)
-        return detectar_vagoneta_y_placa(image) 
-        
-    except Exception as e:
-        print(f"❌ Error en detección mejorada: {e}, usando método original...")
-        import traceback
-        traceback.print_exc()
-        try:
-            # Fallback ahora devuelve 5 elementos
-            return detectar_vagoneta_y_placa(image) 
-        except Exception as fallback_error:
-            print(f"❌ Error también en método original (durante el fallback de detección mejorada): {fallback_error}")
-            traceback.print_exc() # <--- AÑADIDO: Imprimir traza completa del error de fallback
-            return _PLACEHOLDER_CROPPED_IMAGE, None, None, None, None
+    return processor.detect_objects_unified(frame)

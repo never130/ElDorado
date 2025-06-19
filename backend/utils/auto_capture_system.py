@@ -10,7 +10,7 @@ import asyncio
 import time
 from datetime import datetime, timezone # MODIFIED: Added timezone
 from typing import Dict, List, Optional, Tuple, Any 
-from utils.image_processing import process_image # Assuming this is the correct path
+from utils.image_processing import run_detection_on_frame # Updated import
 from crud import create_vagoneta_record
 import os
 import json # MODIFIED: Ensured json is imported
@@ -271,22 +271,21 @@ class SmartCameraCapture:
         
         best_detection_result = None
         best_frame_for_detection = None
-        
-        # Analyze frames from buffer + current_frame
+          # Analyze frames from buffer + current_frame
         # Ensure buffer frames are used if available, otherwise just current_frame
-        frames_to_analyze = self.pre_capture_buffer + [current_frame] \
-            if self.pre_capture_buffer else [current_frame]
-
+        if self.pre_capture_buffer:
+            frames_to_analyze = self.pre_capture_buffer + [current_frame]
+        else:
+            frames_to_analyze = [current_frame]
+        
         for f_idx, test_frame in enumerate(frames_to_analyze):
-            # process_image expects image path or numpy array.
-            # Assuming process_image can handle a numpy array directly.
-            # If it expects a path, frame needs to be saved temporarily.
-            # For now, assume process_image(numpy_array) is valid.
-            detection_data = process_image(test_frame, source_type='auto_capture_frame')
+            # run_detection_on_frame expects a numpy array (frame)
+            # and returns a dict with detection results
+            detection_data = run_detection_on_frame(test_frame)
             
-            if detection_data and detection_data.get('numero'):
-                current_confidence = float(detection_data.get('confidence', 0.0))
-                if not best_detection_result or current_confidence > float(best_detection_result.get('confidence', 0.0)):
+            if detection_data and detection_data.get('numero_detectado'):
+                current_confidence = float(detection_data.get('confianza_numero', 0.0))
+                if not best_detection_result or current_confidence > float(best_detection_result.get('confianza_numero', 0.0)):
                     best_detection_result = detection_data
                     best_frame_for_detection = test_frame # Store the frame that yielded best detection
         
@@ -303,7 +302,7 @@ class SmartCameraCapture:
         try:
             timestamp_dt = datetime.now(timezone.utc)
             
-            numero_str = str(detection.get('numero', 'unknown')).replace(' ', '_').replace('/', '_')
+            numero_str = str(detection.get('numero_detectado', 'unknown')).replace(' ', '_').replace('/', '_')
             sane_evento = str(self.evento).replace(' ', '_').replace('/', '_')
 
             image_filename = f"{numero_str}_{sane_evento}_{timestamp_dt.strftime('%Y%m%d_%H%M%S%f')}.jpg"
@@ -315,7 +314,7 @@ class SmartCameraCapture:
             cv2.imwrite(str(image_full_save_path), frame)
             image_path_for_db = f"uploads/{image_filename}"
 
-            raw_confidence = detection.get('confidence', 0.0)
+            raw_confidence = detection.get('confianza_numero', 0.0)
             try:
                 confidence_float = float(raw_confidence)
                 if confidence_float < 0.0: confidence_float = 0.0
@@ -325,7 +324,7 @@ class SmartCameraCapture:
                 confidence_float = 0.0
             
             vagoneta_data_create = VagonetaCreate(
-                numero=str(detection['numero']), # Ensure numero is string
+                numero=str(detection['numero_detectado']), # Ensure numero is string
                 evento=self.evento,
                 tunel=self.tunel,
                 timestamp=timestamp_dt,
@@ -339,7 +338,7 @@ class SmartCameraCapture:
             
             record_id = create_vagoneta_record(vagoneta_data_create) # This is a sync function
 
-            print(f"✅ Vagoneta {detection['numero']} guardada automáticamente ({self.evento}), ID: {record_id}")
+            print(f"✅ Vagoneta {detection['numero_detectado']} guardada automáticamente ({self.evento}), ID: {record_id}")
 
             if self.ws_manager:
                 db_record_dict = vagoneta_data_create.dict()
