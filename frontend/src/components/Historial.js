@@ -7,11 +7,10 @@ const Historial = () => {
   const [registros, setRegistros] = useState([]);
   const [numero, setNumero] = useState("");
   const [fecha, setFecha] = useState("");
-  const [loading, setLoading] = useState(false);
-  const fetchRegistros = async () => {
+  const [loading, setLoading] = useState(false);  const fetchRegistros = async () => {
     setLoading(true);
     try {
-      const params = { limit: 10, skip: 0 }; // Add pagination params
+      const params = { limit: 100, skip: 0 }; // Incrementar límite para mostrar más registros
       if (numero) params.filtro = numero; // Changed from 'numero' to 'filtro' to match backend
       // Note: fecha filter needs to be implemented on backend
       if (fecha) {
@@ -22,8 +21,7 @@ const Historial = () => {
       // Use the historial endpoint
       const res = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.vagonetas}`, { params }); 
       console.log("Datos crudos de la API:", res.data); // Para depuración
-      
-      // Handle new response structure with HistorialResponse
+        // Handle new response structure with HistorialResponse
       const responseData = res.data;
       let data = [];
       
@@ -31,17 +29,25 @@ const Historial = () => {
         data = responseData.registros.map(item => ({
           ...item,
           // Map new field names to old ones for compatibility
-          numero: item.numero_detectado || item.numero,
+          numero: item.numero_detectado || item.numero || 'N/A',
           // Handle timestamp properly
           timestamp: new Date(item.timestamp && !item.timestamp.endsWith('Z') ? item.timestamp + 'Z' : item.timestamp),
           confianza: item.confianza,
           // Map additional fields
-          origen_deteccion: item.origen_deteccion || 'desconocido'
+          origen_deteccion: item.origen_deteccion || 'desconocido',
+          evento: item.evento || 'ingreso',
+          tunel: item.tunel || '',
+          merma: item.merma || null,
+          modelo_ladrillo: item.modelo_ladrillo || null,
+          imagen_path: item.imagen_path || null,
+          url_video_frame: item.url_video_frame || null,
+          ruta_video_original: item.ruta_video_original || null
         }));
       } else if (Array.isArray(responseData)) {
         // Fallback for old response format
         data = responseData.map(item => ({
           ...item,
+          numero: item.numero_detectado || item.numero || 'N/A',
           timestamp: new Date(item.timestamp && !item.timestamp.endsWith('Z') ? item.timestamp + 'Z' : item.timestamp),
           confianza: item.confianza
         }));
