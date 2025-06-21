@@ -96,7 +96,7 @@ class ImageProcessor:
 
         # 1. Ejecutar el modelo UNA SOLA VEZ
         processed_image = self.preprocess_image(image)
-        results = self.model(processed_image, conf=self.min_confidence)
+        results = self.model(processed_image, conf=self.min_confidence, imgsz=640)
 
         if not results or not results[0].boxes:
             return {}

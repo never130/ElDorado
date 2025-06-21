@@ -66,14 +66,13 @@ const Historial = () => {
   useEffect(() => {
     fetchHistorial(1, true);
   }, [fetchHistorial]);
-
   // Efecto para resetear la página cuando cambien los filtros
   useEffect(() => {
     if (currentPage > 1) {
       setCurrentPage(1);
       fetchHistorial(1, true);
     }
-  }, [searchTerm, fechaInicio, fechaFin]);
+  }, [searchTerm, fechaInicio, fechaFin, currentPage, fetchHistorial]);
   // Simplificar el filtrado ya que ahora se hace en el servidor
   const filteredHistorial = useMemo(() => {
     return historial; // Los filtros se aplican en el servidor
@@ -82,8 +81,7 @@ const Historial = () => {
   // Simplificar el ordenamiento ya que se hace en el servidor
   const sortedHistorial = useMemo(() => {
     return filteredHistorial; // El ordenamiento se hace en el servidor
-  }, [filteredHistorial]);
-  const handleSort = (key) => {
+  }, [filteredHistorial]);  const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -93,11 +91,12 @@ const Historial = () => {
     fetchHistorial(1, true);
   };
 
-  const handleLoadMore = () => {
-    if (hasMore && !loading) {
-      fetchHistorial(currentPage + 1, false);
-    }
-  };
+  // Función comentada ya que no se usa actualmente
+  // const handleLoadMore = () => {
+  //   if (hasMore && !loading) {
+  //     fetchHistorial(currentPage + 1, false);
+  //   }
+  // };
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -213,8 +212,8 @@ const Historial = () => {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full bg-blue rounded-lg shadow-md">          <thead className="bg-blue-600 text-white">
-            <tr>              <th className="py-3 px-4 text-center cursor-pointer font-semibold bg-blue-700" onClick={() => handleSort('numero_detectado')}>
+        <table className="min-w-full bg-blue rounded-lg shadow-md">          <thead className="bg-blue-600 text-black">
+            <tr>              <th className="py-3 px-4 text-center cursor-pointer font-semibold" onClick={() => handleSort('numero_detectado')}>
                 N° {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '🔼' : '🔽')}
               </th>
               <th className="py-3 px-4 text-left cursor-pointer font-semibold" onClick={() => handleSort('evento')}>
