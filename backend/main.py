@@ -10,6 +10,7 @@ import json
 import traceback
 import cv2 
 import time
+import numpy as np
 
 from contextlib import asynccontextmanager
 
@@ -29,6 +30,13 @@ from collections import Counter # Keep if used elsewhere, not in provided snippe
 from schemas import VagonetaCreate, VagonetaInDB, HistorialResponse, RegistroHistorialDisplay
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+
+# Variables globales para el sistema
+current_processing_tasks = {}  # Para almacenar tareas en progreso
+video_processing_tasks = {}  # Para el procesamiento de videos
+CAMERAS_CONFIG = []  # Lista de configuraciones de cámaras
+monitor_tasks = {}  # Para las tareas de monitoreo activas
+live_frames = {}  # Para almacenar los frames de las cámaras en vivo
 
 class ConnectionManager:
     def __init__(self):
@@ -623,8 +631,9 @@ async def stream_video_processing(processing_id: str):
                                     timestamp=record_timestamp,
                                     tunel=task_info.get("tunel"),
                                     evento=task_info.get("evento"),
-                                    modelo_ladrillo=None,
-                                    merma=parse_merma(task_info.get("merma_str")),                                    metadata={
+                                    modelo_ladrillo=deteccion.get('modelo_ladrillo'),
+                                    merma=parse_merma(task_info.get("merma_str")),
+                                    metadata={
                                         **(task_info.get("metadata") or {}),
                                         "frame_number": frame_num,
                                         "video_source": Path(task_info['video_path']).name
@@ -782,15 +791,14 @@ async def get_historial_registros(
                 doc_data['confianza'] = float(doc_data.get('confianza', 0.0))
             except (ValueError, TypeError):
                 doc_data['confianza'] = 0.0
-
+            
             doc_data['origen_deteccion'] = str(doc_data.get('origen_deteccion', 'historico'))
             doc_data['evento'] = str(doc_data.get('evento', 'desconocido'))
             doc_data['tunel'] = str(doc_data.get('tunel')) if doc_data.get('tunel') is not None else None
             doc_data['merma'] = str(doc_data.get('merma')) if doc_data.get('merma') is not None else None
+            doc_data['modelo_ladrillo'] = str(doc_data.get('modelo_ladrillo', ''))
+            doc_data['imagen_path'] = str(doc_data.get('imagen_path', ''))
 
-            doc_data['imagen_path'] = doc_data.get('imagen_path')
-            doc_data['modelo_ladrillo'] = doc_data.get('modelo_ladrillo')
-            
             registro_display = RegistroHistorialDisplay(**doc_data)
             registros_list.append(registro_display)
         except Exception as e:
@@ -1049,34 +1057,42 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
                                 frame_filename = f"detection_frame_{camera_id}_{timestamp_str}.jpg"
                                 frame_path = UPLOAD_DIR / frame_filename
                                 cv2.imwrite(str(frame_path), frame)
-                                
-                                # Crear registro en base de datos
+                                  # Crear registro en base de datos
                                 vagoneta_create_obj = VagonetaCreate(
                                     numero=str(numero_detectado),
                                     imagen_path=f"uploads/{frame_filename}",
                                     timestamp=datetime.now(timezone.utc),
-                                    tunel=camera_config.get("tunel"),
-                                    evento="deteccion_automatica",
+                                    tunel=camera_config.get("tunel", "Monitor en vivo"),
+                                    evento="ingreso",  # Cambiar de "deteccion_automatica" a "ingreso" para consistencia
                                     modelo_ladrillo=modelo_ladrillo,
                                     merma=None,
-                                    metadata={"camera_id": camera_id, "fps": fps},
+                                    metadata={"camera_id": camera_id, "fps": fps, "detection_type": "live_monitoring"},
                                     confianza=float(confianza_numero),
                                     origen_deteccion="live_camera"
                                 )
                                 record_id = crud.create_vagoneta_record(vagoneta_create_obj)
                                 
+                                print(f"✅ Detección en vivo guardada - Cámara: {camera_id}, N°: {numero_detectado}, Modelo: {modelo_ladrillo}, Conf: {confianza_numero:.3f}, DB_ID: {record_id}")
+                                
                                 # Notificar a los clientes WebSocket
                                 db_record_dict = vagoneta_create_obj.dict()
                                 db_record_dict["_id"] = str(record_id)
                                 db_record_dict["id"] = str(record_id)
-                                db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+                                db_record_dict["numero_detectado"] = str(numero_detectado)  # Asegurar consistencia con el frontend
+                                if isinstance(db_record_dict.get("timestamp"), datetime):
+                                    db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
                                 
                                 await manager.broadcast_json({
                                     "type": "new_detection",
                                     "data": db_record_dict
                                 })
+                                
+                                print(f"📡 Detección en vivo enviada por WebSocket a {len(manager.active_connections)} cliente(s)")
+                                
                     except Exception as e:
-                        print(f"Error en detección de cámara {camera_id}: {e}")                
+                        print(f"Error en detección de cámara {camera_id}: {e}")
+                        import traceback
+                        traceback.print_exc()
                 # Almacenar frame para streaming
                 live_frames[camera_id] = frame
                 
@@ -1092,6 +1108,35 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
         if cap:
             cap.release()
         print(f"🔌 Liberando recursos de cámara {camera_id}")
+
+@app.get("/video/stream/{camera_id}")
+async def stream_camera_video(camera_id: str):
+    """Stream de video en tiempo real de una cámara específica"""
+    def generate_frames():
+        while True:
+            if camera_id in live_frames:
+                frame = live_frames[camera_id]
+                # Codificar el frame como JPEG
+                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if ret:
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            else:
+                # Si no hay frame disponible, enviar una imagen placeholder
+                placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(placeholder, f"Camara {camera_id} no disponible", 
+                           (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                ret, buffer = cv2.imencode('.jpg', placeholder)
+                if ret:
+                    frame_bytes = buffer.tobytes()
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            
+            import time
+            time.sleep(0.1)  # ~10 FPS
+    
+    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 # ====================
 # INICIALIZACIÓN DEL SERVIDOR
