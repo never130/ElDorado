@@ -592,7 +592,7 @@ const Upload = () => {
             disabled={loading || files.length === 0}
             className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-150 ease-in-out flex"
           >
-            {loading ? <><Spinner size="sm" /> <span className="ml-2">Procesando...</span></> : "📤 Iniciar Procesamiento"}
+            {loading ? <><Spinner size={20} /> <span className="ml-2">Procesando...</span></> : "📤 Iniciar Procesamiento"}
           </button>
           {loading && (
             <button

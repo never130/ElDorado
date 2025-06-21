@@ -124,11 +124,12 @@ class ImageProcessor:
         if numero_compuesto and info_numero:
             final_result['numero_detectado'] = numero_compuesto
             final_result['confianza_numero'] = info_numero.get('confidence')
-            final_result['bbox_numero'] = info_numero.get('bbox')
-
-        # 3. Extraer detecciones de ladrillo y vagoneta del MISMO resultado
+            final_result['bbox_numero'] = info_numero.get('bbox')        # 3. Extraer detecciones de ladrillo y vagoneta del MISMO resultado
         best_ladrillo = None
         best_vagoneta = None
+
+        # Clases de tipos de ladrillos conocidas (basado en los logs del modelo)
+        brick_classes = {'CH08L', 'Losa', 'Semilosa', 'ladrillo', 'Ladrillo'}
 
         for box in results_obj.boxes:
             confidence = float(box.conf[0])
@@ -136,7 +137,8 @@ class ImageProcessor:
             class_name = results_obj.names[class_id]
             bbox = box.xyxy[0].cpu().numpy()
 
-            if 'ladrillo' in class_name:
+            # Verificar si es un tipo de ladrillo conocido
+            if class_name in brick_classes or 'ladrillo' in class_name.lower():
                 if best_ladrillo is None or confidence > best_ladrillo['confidence']:
                     best_ladrillo = {
                         'tipo': class_name,
