@@ -12,19 +12,35 @@ const RealTimeMonitorNew = () => {
   const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
-
   const ws = useRef(null);
   const wsReconnectTimeout = useRef(null);
-
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
   const connectWebSocket = useCallback(() => {
+    // Cerrar conexión existente si está abierta
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log('🔌 WebSocket ya está conectado');
       return;
     }
-    ws.current = new WebSocket('ws://localhost:8000/ws/detections');
-    ws.current.onopen = () => {
-      console.log('WebSocket conectado');
-      setIsConnected(true);
-    };    ws.current.onmessage = (event) => {
+    
+    // Limpiar conexión anterior si existe
+    if (ws.current) {
+      ws.current.close(1000, 'Reconnecting');
+    }
+    
+    try {
+      console.log('🔌 Intentando conectar WebSocket...');
+      ws.current = new WebSocket('ws://localhost:8000/ws/detections');
+        ws.current.onopen = () => {
+        console.log('🔌✅ WebSocket conectado exitosamente');
+        setIsConnected(true);
+        reconnectAttempts.current = 0; // Resetear contador de intentos
+        // Limpiar timeout de reconexión si existe
+        if (wsReconnectTimeout.current) {
+          clearTimeout(wsReconnectTimeout.current);
+          wsReconnectTimeout.current = null;
+        }
+      };ws.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
         console.log('🔔 WS Message recibido:', message);
@@ -66,19 +82,52 @@ const RealTimeMonitorNew = () => {
           default:
             console.log('ℹ️ Mensaje WebSocket no manejado:', message.type);
             break;
-        }
-      } catch (error) {
+        }      } catch (error) {
         console.error('❌ Error parsing WebSocket message:', error, event.data);
       }
     };
-    ws.current.onerror = (error) => console.error('WebSocket error:', error);
-    ws.current.onclose = () => {
+    
+    ws.current.onerror = (error) => {
+      console.error('🔌❌ WebSocket error occurred:', {
+        readyState: ws.current?.readyState,
+        url: ws.current?.url,
+        error: error
+      });
       setIsConnected(false);
-      console.log('WebSocket desconectado. Intentando reconectar...');
-      if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
-      wsReconnectTimeout.current = setTimeout(connectWebSocket, 5000);
+      // No intentar reconectar inmediatamente en caso de error
     };
-  }, []);  const loadInitialData = useCallback(async () => {
+    
+    ws.current.onclose = (event) => {
+      setIsConnected(false);
+      console.log('🔌❌ WebSocket desconectado:', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean      });
+        // Solo reconectar si no fue un cierre intencional (código 1000)
+      if (event.code !== 1000 && reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current += 1;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000); // Backoff exponencial
+        console.log(`🔄 Intento de reconexión ${reconnectAttempts.current}/${maxReconnectAttempts} en ${delay}ms...`);
+        if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
+        wsReconnectTimeout.current = setTimeout(connectWebSocket, delay);
+      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+        console.error('🔌❌ Máximo número de intentos de reconexión alcanzado');
+        setIsConnected(false);
+      }
+    };
+      } catch (error) {
+      console.error('🔌❌ Error al crear WebSocket:', error);
+      setIsConnected(false);
+      // Intentar reconectar en caso de error de creación si no hemos excedido el límite
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current += 1;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+        console.log(`🔄 Reintentando conexión en ${delay}ms (intento ${reconnectAttempts.current}/${maxReconnectAttempts})...`);
+        if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
+        wsReconnectTimeout.current = setTimeout(connectWebSocket, delay);
+      }
+    }
+  }, []);const loadInitialData = useCallback(async () => {
     setIsLoadingData(true);
     try {
       const camerasRes = await axios.get('http://localhost:8000/cameras/list');
@@ -144,61 +193,103 @@ const RealTimeMonitorNew = () => {
       }
     }
   };
-
   const stopMonitoring = async () => {
     if (!selectedCamera) return;
     try {
       await axios.post(`http://localhost:8000/monitor/stop/${selectedCamera}`);
+      setIsMonitoring(false);
+      setMonitorError('');
+      console.log('✅ Monitoreo detenido exitosamente');
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Error desconocido al detener.';
-      setMonitorError(errorMsg);
+      if (error.response?.status === 404) {
+        // Si ya está detenido, simplemente actualizar el estado
+        setIsMonitoring(false);
+        setMonitorError('');
+        console.log('ℹ️ El monitoreo ya estaba detenido');
+      } else {
+        const errorMsg = error.response?.data?.detail || 'Error desconocido al detener.';
+        setMonitorError(errorMsg);
+        console.error('❌ Error al detener monitoreo:', errorMsg);
+      }
     }
   };
-
   const getSystemInfo = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:8000/cameras/system-info');
       setSystemInfo(response.data);
       setShowSystemInfo(true);
+      console.log('📊 Info del sistema obtenida:', response.data);
     } catch (error) {
-      setMonitorError('Error al obtener info del sistema: ' + error.message);
+      console.error('❌ Error al obtener info del sistema:', error);
+      // Intentar con endpoint alternativo si el primero falla
+      try {
+        const altResponse = await axios.get('http://localhost:8000/cameras/info');
+        setSystemInfo(altResponse.data);
+        setShowSystemInfo(true);
+        console.log('📊 Info del sistema obtenida (endpoint alternativo):', altResponse.data);
+      } catch (altError) {
+        setMonitorError('Error al obtener info del sistema. Endpoint no disponible.');
+        console.error('❌ Error en endpoint alternativo:', altError);
+      }
     }
-  }, []);
-  const checkMonitorStatus = async () => {
+  }, []);  const checkMonitorStatus = async () => {
     try {
       const response = await axios.get('http://localhost:8000/monitor/status');
       const activeMonitors = response.data.active_monitors || [];
       const isWebcamActive = activeMonitors.some(m => m.camera_id === selectedCamera);
       setIsMonitoring(isWebcamActive);
-      console.log('📊 Estado del monitor:', response.data);
+      console.log('📊 Estado del monitor actualizado:', response.data);
+      
+      // Mostrar información del estado
+      const totalActive = activeMonitors.length;
+      const message = `Estado actualizado: ${totalActive} monitor(es) activo(s). ${isWebcamActive ? `Cámara ${selectedCamera} está activa.` : `Cámara ${selectedCamera} está inactiva.`}`;
+      
+      // Mostrar mensaje temporal
+      setMonitorError('');
+      alert(message);
+      
       if (isWebcamActive) {
         setMonitorError('');
       }
     } catch (error) {
       console.error('❌ Error verificando estado del monitor:', error);
+      setMonitorError('Error al verificar estado del monitor: ' + error.message);
     }
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 bg-cyan-50 min-h-screen">      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-cyan-800">📊 Monitor en Tiempo Real</h1>
-        <div className="flex items-center space-x-4">
+        <h1 className="text-3xl font-bold text-cyan-800">📊 Monitor en Tiempo Real</h1>        <div className="flex items-center space-x-4">
           <button 
-            onClick={connectWebSocket}
-            className={`px-3 py-1 rounded text-sm ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-            title="Reconectar WebSocket si está desconectado"
+            onClick={() => {
+              reconnectAttempts.current = 0; // Resetear contador
+              connectWebSocket();
+            }}
+            className={`px-3 py-1 rounded text-sm ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
+            title={isConnected ? "Conexión WebSocket activa" : "Hacer click para reconectar WebSocket"}
           >
-            {isConnected ? '🟢 Conectado' : '🔴 Reconectar'}
-          </button>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">{isConnected ? 'WebSocket Activo' : 'WebSocket Desconectado'}</span>
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            {isConnected ? '🟢 Conectado' : reconnectAttempts.current >= maxReconnectAttempts ? '🔴 Reconectar' : '🟡 Conectando...'}
+          </button>          <div className="flex items-center space-x-2">
+            <span className="text-sm text-gray-600">
+              {isConnected 
+                ? 'WebSocket Activo' 
+                : reconnectAttempts.current >= maxReconnectAttempts 
+                  ? 'WebSocket Desconectado (Click para reconectar)' 
+                  : 'WebSocket Conectando...'
+              }
+            </span>
+            <div className={`w-3 h-3 rounded-full ${
+              isConnected 
+                ? 'bg-green-500 animate-pulse' 
+                : reconnectAttempts.current >= maxReconnectAttempts 
+                  ? 'bg-red-500' 
+                  : 'bg-yellow-500 animate-pulse'
+            }`}></div>
           </div>
         </div>
       </div><div className="bg-white rounded-lg p-6 mb-6 shadow-sm border-l-4 border-purple-500">
         <h2 className="text-xl font-bold text-purple-800 mb-4">🎥 Control de Cámaras</h2>
-        <div className="grid md:grid-cols-5 gap-4 items-end">
-          <div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">          <div className="col-span-2 md:col-span-1">
             <label className="block text-sm font-medium text-purple-700 mb-2">Seleccionar Cámara</label>
             <select value={selectedCamera} onChange={(e) => setSelectedCamera(e.target.value)} className="w-full p-2 border border-purple-300 rounded-md" disabled={isMonitoring || isLoadingData}>
               <option value="">{isLoadingData ? "Cargando..." : "-- Seleccione --"}</option>
@@ -251,7 +342,7 @@ const RealTimeMonitorNew = () => {
         )}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">        <div className="md:col-span-2 bg-white rounded-lg p-4 shadow-sm">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">        <div className="xl:col-span-2 bg-white rounded-lg p-4 shadow-sm">
             <h3 className="text-lg font-bold text-gray-800 mb-4">📹 Visualización de Cámara en Vivo</h3>
             <div className="bg-black aspect-video rounded-md flex items-center justify-center text-white relative">
                 {selectedCamera ? (
@@ -334,7 +425,7 @@ const RealTimeMonitorNew = () => {
               </button>
             </div>
           </div>
-          <div className="space-y-3 h-96 overflow-y-auto">            {recentDetections.length > 0 ? recentDetections.map((det, index) => (
+          <div className="space-y-3 h-[600px] overflow-y-auto border border-gray-200 rounded-md p-2">            {recentDetections.length > 0 ? recentDetections.map((det, index) => (
                 <div key={`det-${det.id || det._id || index}-${det.timestamp || Date.now()}-${index}`} className={`p-3 rounded-md border transition-all hover:shadow-md ${
                   det.origen_deteccion === 'live_camera' 
                     ? 'bg-green-50 border-green-200 hover:bg-green-100' 
@@ -442,40 +533,70 @@ const RealTimeMonitorNew = () => {
               <p><strong>Última Actualización:</strong> {new Date(debugInfo.timestamp).toLocaleTimeString()}</p>
           </div>
         </div>
-      )}
-
-      {showSystemInfo && systemInfo && (
+      )}      {showSystemInfo && systemInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowSystemInfo(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-3xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Información de Cámaras del Sistema</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-bold text-blue-700 mb-3">Cámaras Físicas Detectadas</h4>
-                <div className="space-y-2">
-                  {systemInfo.system_cameras.map((cam, index) => (
-                    <div key={index} className="p-3 rounded border bg-blue-50 border-blue-200">
-                      <div className="font-medium">Índice: {cam.index} ({cam.status})</div>
-                      <div className="text-sm text-gray-600">Resolución: {cam.width}x{cam.height} @ {cam.fps} FPS</div>
-                    </div>
-                  ))}
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-gray-800">📊 Información de Cámaras del Sistema</h2>
+              <button 
+                onClick={() => setShowSystemInfo(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+            
+            {systemInfo.system_cameras ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-bold text-blue-700 mb-3">Cámaras Físicas Detectadas</h4>
+                  <div className="space-y-2">
+                    {systemInfo.system_cameras.map((cam, index) => (
+                      <div key={index} className="p-3 rounded border bg-blue-50 border-blue-200">
+                        <div className="font-medium">Índice: {cam.index} ({cam.status})</div>
+                        <div className="text-sm text-gray-600">Resolución: {cam.width}x{cam.height} @ {cam.fps} FPS</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-bold text-green-700 mb-3">Configuración Actual</h4>
+                  <div className="space-y-2">
+                    {systemInfo.configured_cameras.map((cam, index) => (
+                      <div key={index} className={`p-3 rounded border ${cam.currently_monitoring ? 'bg-green-100 border-green-300' : 'bg-gray-50'}`}>
+                        <div className="font-medium flex items-center">{cam.currently_monitoring ? '🟢' : '⚪'} {cam.camera_id}</div>
+                        <div className="text-sm text-gray-600">Túnel: {cam.tunel} | Usa Índice: {cam.camera_url}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div>
-                <h4 className="font-bold text-green-700 mb-3">Configuración Actual</h4>
-                <div className="space-y-2">
-                  {systemInfo.configured_cameras.map((cam, index) => (
-                    <div key={index} className={`p-3 rounded border ${cam.currently_monitoring ? 'bg-green-100 border-green-300' : 'bg-gray-50'}`}>
-                      <div className="font-medium flex items-center">{cam.currently_monitoring ? '🟢' : '⚪'} {cam.camera_id}</div>
-                      <div className="text-sm text-gray-600">Túnel: {cam.tunel} | Usa Índice: {cam.camera_url}</div>
-                    </div>
-                  ))}
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4">📊</div>
+                <p className="text-lg text-gray-500 mb-2">Información del Sistema</p>
+                <div className="bg-gray-50 p-4 rounded-md text-left">
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {JSON.stringify(systemInfo, null, 2)}
+                  </pre>
                 </div>
               </div>
+            )}
+            
+            {systemInfo.total_system_cameras !== undefined && (
+              <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-300">
+                <p><strong>Resumen:</strong> {systemInfo.total_system_cameras} cámara(s) detectada(s) | {systemInfo.active_monitors || 0} monitor(es) activo(s).</p>
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setShowSystemInfo(false)} 
+                className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+              >
+                Cerrar
+              </button>
             </div>
-            <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-300">
-              <p><strong>Resumen:</strong> {systemInfo.total_system_cameras} cámara(s) detectada(s) | {systemInfo.active_monitors} monitor(es) activo(s).</p>
-            </div>
-            <button onClick={() => setShowSystemInfo(false)} className="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Cerrar</button>
           </div>
         </div>
       )}

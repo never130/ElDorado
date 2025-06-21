@@ -995,11 +995,9 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
             cap = cv2.VideoCapture(str(camera_url))
 
         if not cap.isOpened():
-            raise Exception(f"No se pudo abrir la cámara {camera_id}")
-
-        # Configurar propiedades
+            raise Exception(f"No se pudo abrir la cámara {camera_id}")        # Configurar propiedades
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 640)
         cap.set(cv2.CAP_PROP_FPS, 15)
 
         # Verificar lectura
@@ -1124,9 +1122,9 @@ async def stream_camera_video(camera_id: str):
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
             else:
                 # Si no hay frame disponible, enviar una imagen placeholder
-                placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+                placeholder = np.zeros((640, 640, 3), dtype=np.uint8)
                 cv2.putText(placeholder, f"Camara {camera_id} no disponible", 
-                           (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                           (50, 320), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                 ret, buffer = cv2.imencode('.jpg', placeholder)
                 if ret:
                     frame_bytes = buffer.tobytes()
