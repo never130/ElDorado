@@ -30,7 +30,7 @@ const Navbar = ({ view, setView }) => {
             ❓ Ayuda
           </button>
           <button onClick={() => { setView('config'); setOpen(false); }} className={`w-full md:w-auto py-3 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'config' ? 'bg-indigo-500 text-white shadow-lg' : 'bg-indigo-100 text-indigo-900 hover:bg-indigo-200'} transition border border-indigo-400`}>
-            🧠 Modelo IA
+            🧠 Herramientas Avanzadas
           </button>
         </div>
       </div>

@@ -44,10 +44,15 @@ const Historial = () => {
       if (params.toString()) {
         url += '&' + params.toString();
       }
-      
-      console.log("Fetching URL:", url);
+        console.log("Fetching URL:", url);
       const response = await axios.get(url);
       console.log("Datos recibidos de la API:", response.data);
+      
+      // Log detallado de la estructura de un registro para debug
+      if (response.data.registros && response.data.registros.length > 0) {
+        console.log("Estructura del primer registro:", response.data.registros[0]);
+        console.log("Campos disponibles:", Object.keys(response.data.registros[0]));
+      }
       
       if (resetData || page === 1) {
         setHistorial(response.data.registros || []);
@@ -127,12 +132,13 @@ const Historial = () => {
   };
 
   const downloadCSV = () => {
-    const headers = ["N°", "Evento", "Modelo", "Confianza (%)", "Fecha"];
-    const rows = sortedHistorial.map(item => [
+    const headers = ["N°", "Evento", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
       item.numero_detectado || 'N/A',
       item.evento,
       item.modelo_ladrillo || 'N/A',
-      item.confianza_numero ? (item.confianza_numero * 100).toFixed(1) : 'N/A',
+      item.confianza ? (item.confianza * 100).toFixed(1) : 
+      item.confianza_numero ? (item.confianza_numero * 100).toFixed(1) : 
+      item.confidence ? (item.confidence * 100).toFixed(1) : 'N/A',
       new Date(item.timestamp).toLocaleString('es-ES', {
         year: 'numeric', month: '2-digit', day: '2-digit',
         hour: '2-digit', minute: '2-digit', second: '2-digit'
@@ -230,12 +236,11 @@ const Historial = () => {
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Modelo
-              </th>
-              <th 
+              </th>              <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                onClick={() => handleSort('confianza_numero')}
+                onClick={() => handleSort('confianza')}
               >
-                Confianza {sortConfig.key === 'confianza_numero' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                Confianza {sortConfig.key === 'confianza' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th 
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
@@ -267,26 +272,38 @@ const Historial = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {item.modelo_ladrillo || 'N/A'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {item.confianza_numero ? `${(item.confianza_numero * 100).toFixed(1)}%` : 'N/A'}
+                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {item.confianza ? `${(item.confianza * 100).toFixed(1)}%` : 
+                   item.confianza_numero ? `${(item.confianza_numero * 100).toFixed(1)}%` : 
+                   item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : 
+                   'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(item.timestamp).toLocaleString('es-ES', {
                     year: 'numeric', month: '2-digit', day: '2-digit',
                     hour: '2-digit', minute: '2-digit', second: '2-digit'
                   })}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {item.imagen_path ? (
-                    <button
-                      onClick={() => setSelectedImage(`http://localhost:8000${item.imagen_path}`)}
-                      className="text-blue-600 hover:text-blue-800 underline"
-                    >
-                      Ver imagen
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <img 
+                        src={`http://localhost:8000/${item.imagen_path}`}
+                        alt={`Detección ${item.numero_detectado || 'N/A'}`}
+                        className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-gray-200"                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'inline-block';
+                        }}
+                      />
+                      <button
+                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
+                        className="text-blue-600 hover:text-blue-800 underline text-xs hidden"
+                      >
+                        Ver imagen
+                      </button>
+                    </div>
                   ) : (
-                    'Sin imagen'
+                    <span className="text-gray-400 italic text-xs">Sin imagen</span>
                   )}
                 </td>
               </tr>
