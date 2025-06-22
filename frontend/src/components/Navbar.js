@@ -22,7 +22,7 @@ const Navbar = ({ view, setView }) => {
             📡 Monitor en Vivo
           </button>
           <button onClick={() => { setView('trayectoria'); setOpen(false); }} className={`w-full md:w-auto py-3 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'trayectoria' ? 'bg-red-500 text-white shadow-lg' : 'bg-red-100 text-red-900 hover:bg-red-200'} transition border border-red-400`}>
-            🛤️ Consultar
+            Consultar
           </button>
           <button onClick={() => { setView('historial'); setOpen(false); }} className={`w-full md:w-auto py-3 px-4 font-semibold rounded-lg m-1 md:m-0 ${view === 'historial' ? 'bg-orange-500 text-white shadow-lg' : 'bg-orange-100 text-orange-900 hover:bg-orange-200'} transition border border-orange-400`}>
             📊 Historial
