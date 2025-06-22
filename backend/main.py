@@ -46,11 +46,13 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.append(websocket)
         print(f"🔌 WebSocket conectado: {websocket.client}")
+        print(f"📊 Total de conexiones activas: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
         print(f"🔌❌ WebSocket desconectado: {websocket.client}")
+        print(f"📊 Total de conexiones activas: {len(self.active_connections)}")
 
     async def send_personal_message(self, message: str, websocket: WebSocket):
         await websocket.send_text(message)
@@ -70,6 +72,10 @@ class ConnectionManager:
                 pass
 
     async def broadcast_json(self, data: dict):
+        if not self.active_connections:
+            print(f"⚠️ No hay conexiones WebSocket activas para enviar: {data.get('type', 'unknown')}")
+            return
+            
         print(f"📡 Broadcasting a {len(self.active_connections)} conexiones: {data.get('type', 'unknown')}")
         disconnected = []
         for connection in self.active_connections:
@@ -84,6 +90,7 @@ class ConnectionManager:
         for conn in disconnected:
             if conn in self.active_connections:
                 self.active_connections.remove(conn)
+                print(f"🧹 Conexión rota removida: {conn.client}")
 
 manager = ConnectionManager()
 
@@ -863,6 +870,22 @@ async def websocket_endpoint(websocket: WebSocket):
             # Keep connection alive
             data = await websocket.receive_text()
             print(f"📩 Mensaje recibido del cliente: {data}")
+            
+            # Parsear mensaje si es JSON
+            try:
+                message_data = json.loads(data)
+                if message_data.get('type') == 'ping':
+                    # Responder con pong
+                    pong_response = {
+                        "type": "pong",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "server_time": datetime.now(timezone.utc).isoformat()
+                    }
+                    await manager.send_json_to_connection(pong_response, websocket)
+                    continue
+            except json.JSONDecodeError:
+                pass  # No es JSON, continuar con el echo normal
+            
             # Echo back para confirmar comunicación
             echo_response = {
                 "type": "echo",
@@ -886,6 +909,20 @@ async def get_model_info():
     # if 'processor' in globals() and hasattr(processor, 'get_model_details'):
     #     return processor.get_model_details()
     return {"message": "Información del modelo no disponible en esta configuración."}
+
+@app.get("/websocket/status")
+async def get_websocket_status():
+    """Verificar estado de las conexiones WebSocket"""
+    return {
+        "active_connections": len(manager.active_connections),
+        "connections_details": [
+            {
+                "client": str(conn.client),
+                "state": conn.client_state.name if hasattr(conn, 'client_state') else "unknown"
+            } for conn in manager.active_connections
+        ],
+        "total_connections": len(manager.active_connections)
+    }
 
 # Endpoints para Monitor en Vivo
 
