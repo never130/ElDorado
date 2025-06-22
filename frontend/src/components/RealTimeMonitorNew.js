@@ -8,10 +8,10 @@ const RealTimeMonitorNew = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorError, setMonitorError] = useState('');
   const [isConnected, setIsConnected] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-  const [systemInfo, setSystemInfo] = useState(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);  const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
+  const [pingInterval, setPingInterval] = useState(null);
   const ws = useRef(null);
   const wsReconnectTimeout = useRef(null);
   const reconnectAttempts = useRef(0);
@@ -31,7 +31,8 @@ const RealTimeMonitorNew = () => {
     try {
       console.log('🔌 Intentando conectar WebSocket...');
       ws.current = new WebSocket('ws://localhost:8000/ws/detections');
-        ws.current.onopen = () => {
+      
+      ws.current.onopen = () => {
         console.log('🔌✅ WebSocket conectado exitosamente');
         setIsConnected(true);
         reconnectAttempts.current = 0; // Resetear contador de intentos
@@ -40,6 +41,15 @@ const RealTimeMonitorNew = () => {
           clearTimeout(wsReconnectTimeout.current);
           wsReconnectTimeout.current = null;
         }
+        
+        // Iniciar ping periódico para mantener la conexión activa
+        const interval = setInterval(() => {
+          if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+            console.log('📍 Enviando ping al WebSocket...');
+            ws.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+          }
+        }, 30000); // Ping cada 30 segundos
+        setPingInterval(interval);
       };ws.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
@@ -75,9 +85,14 @@ const RealTimeMonitorNew = () => {
           case 'monitor_error':
             setMonitorError(message.data.error);
             setIsMonitoring(false);
-            break;
-          case 'connection_established':
+            break;          case 'connection_established':
             console.log('✅ Conexión WebSocket establecida:', message.message);
+            break;
+          case 'pong':
+            console.log('🏓 Pong recibido del servidor:', message.server_time);
+            break;
+          case 'echo':
+            console.log('📣 Echo recibido:', message);
             break;
           default:
             console.log('ℹ️ Mensaje WebSocket no manejado:', message.type);
@@ -165,10 +180,10 @@ const RealTimeMonitorNew = () => {
 
   useEffect(() => {
     loadInitialData();
-    connectWebSocket();
-    return () => {
+    connectWebSocket();    return () => {
       if (ws.current) ws.current.close(1000, 'Component unmounting');
       if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
+      if (pingInterval) clearInterval(pingInterval);
     };
   }, [loadInitialData, connectWebSocket]);
   const startMonitoring = async () => {
@@ -232,8 +247,26 @@ const RealTimeMonitorNew = () => {
         console.error('❌ Error en endpoint alternativo:', altError);
       }
     }
-  }, []);  const checkMonitorStatus = async () => {
+  }, []);  const checkWebSocketStatus = async () => {
     try {
+      const response = await axios.get('http://localhost:8000/websocket/status');
+      console.log('📊 Estado WebSocket:', response.data);
+      alert(`WebSocket Status:\nConexiones activas: ${response.data.active_connections}\nDetalles: ${JSON.stringify(response.data.connections_details, null, 2)}`);
+    } catch (error) {
+      console.error('Error verificando WebSocket:', error);
+      alert('Error verificando estado del WebSocket');
+    }
+  };
+
+  const forceReconnectWebSocket = () => {
+    console.log('🔄 Forzando reconexión WebSocket...');
+    if (ws.current) {
+      ws.current.close(1000, 'Force reconnect');
+    }
+    reconnectAttempts.current = 0;
+    setTimeout(connectWebSocket, 1000);  };
+
+  const checkMonitorStatus = async () => {    try {
       const response = await axios.get('http://localhost:8000/monitor/status');
       const activeMonitors = response.data.active_monitors || [];
       const isWebcamActive = activeMonitors.some(m => m.camera_id === selectedCamera);
@@ -247,13 +280,9 @@ const RealTimeMonitorNew = () => {
       // Mostrar mensaje temporal
       setMonitorError('');
       alert(message);
-      
-      if (isWebcamActive) {
-        setMonitorError('');
-      }
     } catch (error) {
-      console.error('❌ Error verificando estado del monitor:', error);
-      setMonitorError('Error al verificar estado del monitor: ' + error.message);
+      console.error('❌ Error al verificar estado del monitor:', error);
+      setMonitorError('Error al verificar estado del monitor');
     }
   };
 
@@ -304,9 +333,14 @@ const RealTimeMonitorNew = () => {
             </button>
           </div>          <div>
             <button onClick={getSystemInfo} className="w-full px-4 py-2 rounded-md font-medium bg-blue-500 text-white hover:bg-blue-600">🔍 Info Cámaras</button>
+          </div>          <div>
+            <button onClick={checkMonitorStatus} className="w-full px-4 py-2 rounded-md font-medium bg-purple-500 text-white hover:bg-purple-600">📊 Estado</button>
           </div>
           <div>
-            <button onClick={checkMonitorStatus} className="w-full px-4 py-2 rounded-md font-medium bg-purple-500 text-white hover:bg-purple-600">📊 Estado</button>
+            <button onClick={checkWebSocketStatus} className="w-full px-4 py-2 rounded-md font-medium bg-orange-500 text-white hover:bg-orange-600">🔌 WebSocket</button>
+          </div>
+          <div>
+            <button onClick={forceReconnectWebSocket} className="w-full px-4 py-2 rounded-md font-medium bg-yellow-500 text-white hover:bg-yellow-600">🔄 Reconectar</button>
           </div>
           <div className="text-center">
             <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${isMonitoring ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>

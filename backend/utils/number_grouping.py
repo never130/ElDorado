@@ -16,21 +16,34 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
         tuple: (frame_procesado, numero_compuesto, info_deteccion)
     """
     detecciones_actuales = []
-
-    # Procesar resultados de YOLO
+    min_confidence_filter = 0.20  # Filtro mínimo de confianza para números    # Procesar resultados de YOLO
     if resultados_yolo and len(resultados_yolo) > 0 and resultados_yolo[0].boxes is not None:
         for box, cls, conf in zip(resultados_yolo[0].boxes.xyxy, resultados_yolo[0].boxes.cls, resultados_yolo[0].boxes.conf):
+            confidence = float(conf)
+            class_id = int(cls)
+            
+            # FILTRAR SOLO CLASES NUMÉRICAS (0-99) para detección de números
+            if not (0 <= class_id <= 99):
+                continue  # Saltar clases de ladrillos (100-105)
+                
+            # Filtrar detecciones con confianza muy baja
+            if confidence < min_confidence_filter:
+                continue
+                
             x1, y1, x2, y2 = map(int, box)
             detecciones_actuales.append({
                 'bbox': (x1, y1, x2, y2),
-                'class': int(cls),
-                'confidence': float(conf),
+                'class': class_id,
+                'confidence': confidence,
                 'x_center': (x1 + x2) // 2,
                 'y_center': (y1 + y2) // 2
             })
 
     if not detecciones_actuales:
+        print("🔍 DEBUG - No se encontraron detecciones válidas después del filtrado")
         return frame, None, {}
+
+    print(f"🔍 DEBUG - {len(detecciones_actuales)} detecciones después del filtrado (min conf: {min_confidence_filter})")
 
     # Ordenar de izquierda a derecha para composición correcta
     detecciones_actuales.sort(key=lambda x: x['x_center'])
@@ -52,9 +65,7 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
             else:
                 grupos.append(grupo_actual)
                 grupo_actual = [detecciones_actuales[i]]
-        grupos.append(grupo_actual)
-
-    # Procesar grupos y encontrar el mejor
+        grupos.append(grupo_actual)    # Procesar grupos y encontrar el mejor
     mejor_grupo = None
     mejor_confianza = 0
     
@@ -69,32 +80,46 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
 
     if not mejor_grupo:
         return frame, None, {}
-
-    # Mapear clases a números reales usando tu mapeo existente
-    numero_compuesto = "".join(
-        mapear_clases_a_numeros(d['class']) for d in sorted(mejor_grupo, key=lambda x: x['bbox'][0])
-    )
+      # MEJORA: Formar número compuesto concatenando dígitos ordenados
+    # Si hay múltiples detecciones en el grupo, concatenar en orden de izquierda a derecha
+    if len(mejor_grupo) > 1:
+        # Ordenar el grupo por posición x (izquierda a derecha)
+        mejor_grupo_ordenado = sorted(mejor_grupo, key=lambda x: x['x_center'])
+        # Concatenar los números mapeados
+        numeros_individuales = [mapear_clases_a_numeros(det['class']) for det in mejor_grupo_ordenado]
+        numero_compuesto = ''.join(numeros_individuales)
+        # Usar la confianza promedio del grupo
+        confianza_final = sum(d['confidence'] for d in mejor_grupo) / len(mejor_grupo)
+    else:
+        # Para números de un solo dígito, usar la detección directamente
+        mejor_deteccion = mejor_grupo[0]
+        numero_compuesto = mapear_clases_a_numeros(mejor_deteccion['class'])
+        confianza_final = mejor_deteccion['confidence']
+    
+    # Log de depuración mejorado
+    print(f"🔍 DEBUG - Grupo seleccionado: {len(mejor_grupo)} dígito(s)")
+    for i, det in enumerate(mejor_grupo):
+        print(f"  Dígito {i+1}: Clase {det['class']} -> {mapear_clases_a_numeros(det['class'])} (Conf: {det['confidence']:.3f})")
+    print(f"🔍 DEBUG - Número final compuesto: {numero_compuesto}, Confianza promedio: {confianza_final:.3f}")
     
     # Calcular bbox que engloba todo el grupo
     x1_min = min(d['bbox'][0] for d in mejor_grupo)
     y1_min = min(d['bbox'][1] for d in mejor_grupo)
     x2_max = max(d['bbox'][2] for d in mejor_grupo)
     y2_max = max(d['bbox'][3] for d in mejor_grupo)
-    bbox_completo = (x1_min, y1_min, x2_max, y2_max)
-
-    # Dibujar en el frame si se proporciona
+    bbox_completo = (x1_min, y1_min, x2_max, y2_max)    # Dibujar en el frame si se proporciona
     if frame is not None:
         cv2.rectangle(frame, (x1_min, y1_min), (x2_max, y2_max), (255, 0, 0), 3)
         cv2.putText(frame, numero_compuesto, (x1_min, y1_min - 10), 
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-          # Dibujar confianza
-        confianza_texto = f"Conf: {mejor_confianza/len(mejor_grupo):.2f}"
+        # Dibujar confianza
+        confianza_texto = f"Conf: {confianza_final:.2f}"
         cv2.putText(frame, confianza_texto, (x1_min, y2_max + 20), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     info_deteccion = {
         'numero': numero_compuesto,
-        'confidence': min(mejor_confianza / len(mejor_grupo), 1.0),  # Asegurar que nunca sea > 1.0
+        'confidence': confianza_final,
         'bbox': bbox_completo,
         'detecciones_individuales': len(mejor_grupo),
         'grupos_totales': len(grupos),
@@ -106,15 +131,22 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
 def mapear_clases_a_numeros(clase_detectada: int) -> str:
     """
     Mapea las clases del modelo YOLO a números reales.
-    Basado en tu modelo numeros_enteros existente.
-    """    # Mapeo basado en las clases del nuevo modelo numeros_enteros (31 clases)
-    mapeo_clases = {
-        0: "01", 1: "010", 2: "011", 3: "012", 4: "013", 5: "014", 6: "015", 7: "016", 8: "017", 9: "018",
-        10: "019", 11: "02", 12: "020", 13: "021", 14: "03", 15: "030", 16: "035", 17: "04", 18: "040",
-        19: "05", 20: "050", 21: "06", 22: "060", 23: "07", 24: "070", 25: "08", 26: "080", 27: "085", 28: "09", 29: "094", 30: "125"
-    }
     
-    return mapeo_clases.get(clase_detectada, str(clase_detectada))
+    Este modelo tiene 106 clases:
+    - Clases 0-99: Números del 0 al 99 (mapeo directo)
+    - Clases 100-105: Tipos de ladrillos (CH08L, CH12L, CH18L, Losa, Semilosa, Termico)
+    """
+    if 0 <= clase_detectada <= 99:
+        # Mapeo directo para números: clase 0 = "0", clase 1 = "1", ..., clase 99 = "99"
+        numero_mapeado = str(clase_detectada).zfill(2) if clase_detectada < 10 else str(clase_detectada)
+    else:
+        # Para clases de ladrillos (100-105), devolver el número de clase como string
+        numero_mapeado = str(clase_detectada)
+    
+    # Log adicional para depuración
+    print(f"🗂️ MAPEO DEBUG - Clase ID: {clase_detectada} -> Número: {numero_mapeado}")
+    
+    return numero_mapeado
 
 def aplicar_estabilizacion_video(historial_detecciones: List[Dict], nueva_deteccion: Dict, 
                                 max_historial: int = 5) -> str:

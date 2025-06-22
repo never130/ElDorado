@@ -73,7 +73,7 @@ class ImageProcessor:
         print(f"ℹ️ Cargando modelo YOLO desde: {model_path}")
         self.model = YOLO(model_path)
         self.last_detection = None
-        self.min_confidence = 0.15  # Reducido para mejorar detección de números enteros
+        self.min_confidence = 0.25  # Incrementado para reducir falsos positivos
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """Preprocesa la imagen para mejorar la detección"""
@@ -128,8 +128,8 @@ class ImageProcessor:
         best_ladrillo = None
         best_vagoneta = None
 
-        # Clases de tipos de ladrillos conocidas (basado en los logs del modelo)
-        brick_classes = {'CH08L', 'Losa', 'Semilosa', 'ladrillo', 'Ladrillo'}
+        # Clases de tipos de ladrillos conocidas (clases 100-105 del modelo)
+        brick_class_ids = {100, 101, 102, 103, 104, 105}  # CH08L, CH12L, CH18L, Losa, Semilosa, Termico
 
         for box in results_obj.boxes:
             confidence = float(box.conf[0])
@@ -137,8 +137,8 @@ class ImageProcessor:
             class_name = results_obj.names[class_id]
             bbox = box.xyxy[0].cpu().numpy()
 
-            # Verificar si es un tipo de ladrillo conocido
-            if class_name in brick_classes or 'ladrillo' in class_name.lower():
+            # Verificar si es un tipo de ladrillo (clases 100-105)
+            if class_id in brick_class_ids:
                 if best_ladrillo is None or confidence > best_ladrillo['confidence']:
                     best_ladrillo = {
                         'tipo': class_name,
@@ -146,6 +146,7 @@ class ImageProcessor:
                         'bbox': bbox
                     }
 
+            # Buscar vagoneta (si existe esta clase en el modelo)
             if class_name == 'vagoneta':
                  if best_vagoneta is None or confidence > best_vagoneta['confidence']:
                     best_vagoneta = {
