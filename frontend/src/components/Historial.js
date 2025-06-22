@@ -20,7 +20,10 @@ const Historial = () => {
   // Estados para filtros de fecha
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-
+  
+  // Nuevo estado para agrupación
+  const [agruparPorNumero, setAgruparPorNumero] = useState(true); // Por defecto agrupado
+  const [maxPorNumero, setMaxPorNumero] = useState(2);
   const fetchHistorial = useCallback(async (page = 1, resetData = false) => {
     setLoading(true);
     setError('');
@@ -41,6 +44,12 @@ const Historial = () => {
         params.append('filtro', searchTerm);
       }
       
+      // Agregar parámetros de agrupación
+      if (agruparPorNumero) {
+        params.append('agrupar_por_numero', 'true');
+        params.append('max_por_numero', maxPorNumero.toString());
+      }
+      
       if (params.toString()) {
         url += '&' + params.toString();
       }
@@ -57,8 +66,7 @@ const Historial = () => {
       if (resetData || page === 1) {
         setHistorial(response.data.registros || []);
       } else {
-        setHistorial(prev => [...prev, ...(response.data.registros || [])]);
-      }
+        setHistorial(prev => [...prev, ...(response.data.registros || [])]);      }
       
       setTotalRecords(response.data.total || 0);
       setHasMore(response.data.has_more || false);
@@ -68,12 +76,13 @@ const Historial = () => {
       console.error(err);
     }
     setLoading(false);
-  }, [fechaInicio, fechaFin, searchTerm, recordsPerPage]);  // Cargar historial inicial solo una vez
+  }, [fechaInicio, fechaFin, searchTerm, recordsPerPage, agruparPorNumero, maxPorNumero]);  // Incluir dependencias de agrupación
+  
   useEffect(() => {
     fetchHistorial(1, true);
   }, [fetchHistorial]); // Incluir fetchHistorial
 
-  // Efecto separado para manejar cambios en filtros
+  // Efecto separado para manejar cambios en filtros y agrupación
   useEffect(() => {
     // Solo ejecutar si hay filtros activos para evitar loops
     const timeoutId = setTimeout(() => {
@@ -83,7 +92,7 @@ const Historial = () => {
     
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, fechaInicio, fechaFin]); // Solo depender de los filtros, no de currentPage o fetchHistorial
+  }, [searchTerm, fechaInicio, fechaFin, agruparPorNumero, maxPorNumero]); // Incluir nuevas dependencias
 
   // Simplificar el filtrado ya que ahora se hace en el servidor
   const filteredHistorial = useMemo(() => {
@@ -123,12 +132,14 @@ const Historial = () => {
       fetchHistorial(newPage, true);
     }
   };
-
   const clearFilters = () => {
     setSearchTerm('');
     setFechaInicio('');
     setFechaFin('');
     setCurrentPage(1);
+    // Mantener agrupación por defecto
+    setAgruparPorNumero(true);
+    setMaxPorNumero(2);
   };
 
   const downloadCSV = () => {
@@ -203,8 +214,7 @@ const Historial = () => {
             onChange={(e) => setFechaInicio(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-          
-          <input
+            <input
             type="date"
             placeholder="Fecha fin"
             value={fechaFin}
@@ -218,6 +228,47 @@ const Historial = () => {
           >
             Limpiar
           </button>
+        </div>
+      </div>
+      
+      {/* Controles de agrupación */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="agrupar"
+            checked={agruparPorNumero}
+            onChange={(e) => setAgruparPorNumero(e.target.checked)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="agrupar" className="text-sm font-medium text-gray-700">
+            Agrupar duplicados
+          </label>
+        </div>
+        
+        {agruparPorNumero && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="maxPorNumero" className="text-sm text-gray-600">
+              Máximo por número:
+            </label>
+            <select
+              id="maxPorNumero"
+              value={maxPorNumero}
+              onChange={(e) => setMaxPorNumero(parseInt(e.target.value))}
+              className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
+          </div>
+        )}
+        
+        <div className="text-xs text-gray-500">
+          {agruparPorNumero 
+            ? `📊 Mostrando máximo ${maxPorNumero} registro(s) por número (los de mayor confianza)`
+            : "📄 Mostrando todos los registros sin agrupación"
+          }
         </div>
       </div>
 

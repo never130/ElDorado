@@ -754,15 +754,20 @@ async def get_historial_registros(
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,
+    agrupar_por_numero: Optional[bool] = Query(False, description="Si es True, muestra solo 1-2 registros por número con mayor confianza"),
+    max_por_numero: Optional[int] = Query(2, description="Máximo de registros a mostrar por número cuando agrupar_por_numero=True"),
     db = Depends(get_database)
 ):
     if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
         fecha_fin = fecha_fin.replace(hour=23, minute=59, second=59, microsecond=999999)
 
+    # Si se solicita agrupación, obtenemos más registros inicialmente para poder filtrar
+    initial_limit = limit * 10 if agrupar_por_numero else limit
+
     registros_from_db, total_registros = crud.get_vagonetas_historial_with_filters(
         db=db,
         skip=skip,
-        limit=limit,
+        limit=initial_limit,
         sort_by=sort_by,
         sort_order=sort_order,
         filtro=filtro,
@@ -811,6 +816,47 @@ async def get_historial_registros(
         except Exception as e:
             print(f"Error al procesar el documento: {r_doc}")
             print(f"Error: {e}")
+
+    # Aplicar agrupación por número si se solicita
+    if agrupar_por_numero:
+        registros_agrupados = {}
+        
+        # Agrupar por número detectado
+        for registro in registros_list:
+            numero = registro.numero_detectado
+            if numero not in registros_agrupados:
+                registros_agrupados[numero] = []
+            registros_agrupados[numero].append(registro)
+        
+        # Para cada número, ordenar por confianza descendente y tomar solo los primeros max_por_numero
+        registros_filtrados = []
+        for numero, registros_grupo in registros_agrupados.items():
+            # Ordenar por confianza descendente, luego por timestamp descendente
+            registros_grupo_ordenados = sorted(registros_grupo, 
+                                             key=lambda x: (x.confianza, x.timestamp), 
+                                             reverse=True)
+            # Tomar solo los primeros max_por_numero registros
+            registros_filtrados.extend(registros_grupo_ordenados[:max_por_numero])
+        
+        # Ordenar el resultado final según el criterio solicitado
+        if sort_by == "timestamp":
+            registros_filtrados.sort(key=lambda x: x.timestamp, reverse=(sort_order == -1))
+        elif sort_by == "numero":
+            registros_filtrados.sort(key=lambda x: x.numero_detectado, reverse=(sort_order == -1))
+        elif sort_by == "confianza":
+            registros_filtrados.sort(key=lambda x: x.confianza, reverse=(sort_order == -1))
+        elif sort_by == "origen_deteccion":
+            registros_filtrados.sort(key=lambda x: x.origen_deteccion, reverse=(sort_order == -1))
+        
+        # Aplicar paginación después del filtrado
+        start_idx = min(skip, len(registros_filtrados))
+        end_idx = min(skip + limit, len(registros_filtrados))
+        registros_list = registros_filtrados[start_idx:end_idx]
+        
+        # Ajustar el total para reflejar los registros agrupados
+        total_registros = len(registros_filtrados)
+        
+        print(f"📊 Agrupación aplicada: {len(registros_agrupados)} números únicos, {len(registros_filtrados)} registros después del filtrado")
 
     return HistorialResponse(
         registros=registros_list,
