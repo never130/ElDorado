@@ -26,11 +26,12 @@ const Feedback = ({ status, message, details }) => {
 };
 
 const Upload = () => {
-  const [files, setFiles] = useState([]);
-  const [feedback, setFeedback] = useState(null);
+  const [files, setFiles] = useState([]);  const [feedback, setFeedback] = useState(null);
   const [overallProgress, setOverallProgress] = useState(0); 
   const [evento, setEvento] = useState("ingreso");
+  // eslint-disable-next-line no-unused-vars
   const [tunel, setTunel] = useState("");
+  // eslint-disable-next-line no-unused-vars
   const [merma, setMerma] = useState("");
   const [loading, setLoading] = useState(false);
   const [modelInfo, setModelInfo] = useState(null);
@@ -402,6 +403,7 @@ const Upload = () => {
             chunkFormData,
             { 
               signal: newAbortController.signal,
+              // eslint-disable-next-line no-loop-func
               onUploadProgress: (progressEvent) => {
                 const chunkLoaded = progressEvent.loaded; 
                 const currentFileLoaded = start + chunkLoaded;
@@ -416,8 +418,11 @@ const Upload = () => {
                     }
                   }
                 });
-                const overallLoaded = totalUploadedSize + progressEvent.loaded;
-                setOverallProgress(Math.round((overallLoaded / totalSizeAllFiles) * 100));
+                // Calcular progreso overall usando el estado actual
+                setOverallProgress(prev => {
+                  const overallLoaded = totalUploadedSize + progressEvent.loaded;
+                  return Math.round((overallLoaded / totalSizeAllFiles) * 100);
+                });
               }
             }
           );
@@ -628,8 +633,8 @@ const Upload = () => {
           <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
             Detalle del Procesamiento:
           </h3>
-          <div className="space-y-4">
-            {Object.entries(fileProgress).map(([fileId, progress]) => {
+          <div className="space-y-4">            {Object.entries(fileProgress).map(([fileId, progress]) => {
+              // eslint-disable-next-line no-unused-vars
               const originalFile = files.find(f => f.name === progress.name);
               // const isVideo = originalFile?.type.startsWith('video/'); // Not currently used, but kept for potential future use
               const fileSizeMB = progress.total ? (progress.total / (1024 * 1024)).toFixed(2) : 'N/A';

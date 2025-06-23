@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
-const RealTimeMonitorNew = () => {
-  const [recentDetections, setRecentDetections] = useState([]);
+const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorError, setMonitorError] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [isConnected, setIsConnected] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);  const [systemInfo, setSystemInfo] = useState(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
   const [pingInterval, setPingInterval] = useState(null);
@@ -177,7 +177,6 @@ const RealTimeMonitorNew = () => {
       setIsLoadingData(false);
     }
   }, []);
-
   useEffect(() => {
     loadInitialData();
     connectWebSocket();    return () => {
@@ -185,7 +184,7 @@ const RealTimeMonitorNew = () => {
       if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
       if (pingInterval) clearInterval(pingInterval);
     };
-  }, [loadInitialData, connectWebSocket]);
+  }, [loadInitialData, connectWebSocket, pingInterval]);
   const startMonitoring = async () => {
     if (!selectedCamera) return;
     setMonitorError('');
@@ -228,6 +227,7 @@ const RealTimeMonitorNew = () => {
       }
     }
   };
+  // eslint-disable-next-line no-unused-vars
   const getSystemInfo = useCallback(async () => {
     try {
       const response = await axios.get('http://localhost:8000/cameras/system-info');
@@ -247,7 +247,8 @@ const RealTimeMonitorNew = () => {
         console.error('❌ Error en endpoint alternativo:', altError);
       }
     }
-  }, []);  const checkWebSocketStatus = async () => {
+  }, []);  // eslint-disable-next-line no-unused-vars
+  const checkWebSocketStatus = async () => {
     try {
       const response = await axios.get('http://localhost:8000/websocket/status');
       console.log('📊 Estado WebSocket:', response.data);
@@ -258,6 +259,7 @@ const RealTimeMonitorNew = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const forceReconnectWebSocket = () => {
     console.log('🔄 Forzando reconexión WebSocket...');
     if (ws.current) {
@@ -266,6 +268,7 @@ const RealTimeMonitorNew = () => {
     reconnectAttempts.current = 0;
     setTimeout(connectWebSocket, 1000);  };
 
+  // eslint-disable-next-line no-unused-vars
   const checkMonitorStatus = async () => {    try {
       const response = await axios.get('http://localhost:8000/monitor/status');
       const activeMonitors = response.data.active_monitors || [];
