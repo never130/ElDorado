@@ -2,8 +2,13 @@ from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
 from pymongo.errors import ConnectionFailure, OperationFailure
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Cargar el archivo .env
+load_dotenv()
 
 # Cargar variables de entorno para la conexión a MongoDB
+MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")  # Para Atlas
 MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 MONGO_PORT = int(os.getenv("MONGO_PORT", 27017)) # Asegúrate de que sea un entero
 MONGO_USER = os.getenv("MONGO_USER") # Puede ser None si no se requiere autenticación
@@ -20,8 +25,13 @@ def connect_to_mongo():
     global client, db
     if client is None:
         try:
-            if MONGO_USER and MONGO_PASS:
-                # Conectar con autenticación
+            # Prioridad: usar cadena de conexión si está disponible (Atlas)
+            if MONGO_CONNECTION_STRING:
+                # Conectar usando cadena de conexión (MongoDB Atlas)
+                client = MongoClient(MONGO_CONNECTION_STRING)
+                print(f"✅ Conectando a MongoDB Atlas usando cadena de conexión")
+            elif MONGO_USER and MONGO_PASS:
+                # Conectar con autenticación (MongoDB local)
                 client = MongoClient(
                     host=MONGO_HOST,
                     port=MONGO_PORT,
@@ -30,12 +40,12 @@ def connect_to_mongo():
                     authSource=MONGO_AUTH_DB,
                     authMechanism='SCRAM-SHA-256' # O SCRAM-SHA-1 según tu config de MongoDB
                 )
-                print(f"✅ Conectando a MongoDB en {MONGO_HOST}:{MONGO_PORT} con usuario {MONGO_USER} a la BD '{DB_NAME}'")
+                print(f"✅ Conectando a MongoDB local en {MONGO_HOST}:{MONGO_PORT} con usuario {MONGO_USER} a la BD '{DB_NAME}'")
             else:
                 # Conectar sin autenticación (para desarrollo local sin credenciales)
                 mongo_uri_local = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
                 client = MongoClient(mongo_uri_local)
-                print(f"✅ Conectando a MongoDB en {MONGO_HOST}:{MONGO_PORT} sin autenticación a la BD '{DB_NAME}'")
+                print(f"✅ Conectando a MongoDB local en {MONGO_HOST}:{MONGO_PORT} sin autenticación a la BD '{DB_NAME}'")
             
             # Probar la conexión
             client.admin.command('ping')
