@@ -2,45 +2,224 @@ import React, { useState } from 'react';
 
 const ManualUsuario = () => {
   const [sectionOpen, setSectionOpen] = useState('como-usar');
-
   const sections = [
     {
       id: 'como-usar',
       title: ' Cómo Usar el Sistema',
       icon: '🚀',
       content: (
+        <div className="space-y-6">
+          <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
+            <h4 className="font-semibold text-blue-800 mb-3">📹 Captura en Tiempo Real</h4>
+            <div className="text-blue-700 text-sm space-y-2">
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">1.</span>
+                <span>Ir a la sección <strong>"Monitor en Vivo"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">2.</span>
+                <span>Seleccionar una cámara conectada del menú desplegable</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">3.</span>
+                <span>Presionar <strong>"▶️ Iniciar Monitor"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">4.</span>
+                <span>Ver las detecciones aparecer automáticamente en tiempo real</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-blue-600 mr-2">5.</span>
+                <span>Presionar <strong>"⏹️ Detener Monitor"</strong> cuando sea necesario</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
+            <h4 className="font-semibold text-green-800 mb-3">� Carga Manual de Archivos</h4>
+            <div className="text-green-700 text-sm space-y-2">
+              <div className="flex items-start">
+                <span className="text-green-600 mr-2">1.</span>
+                <span>Ir a <strong>"Carga Manual"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-green-600 mr-2">2.</span>
+                <span>Seleccionar imágenes o videos desde tu computadora</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-green-600 mr-2">3.</span>
+                <span>Presionar <strong>"Procesar Archivos"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-green-600 mr-2">4.</span>
+                <span>Ver los resultados de detección directamente en pantalla</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-400">
+            <h4 className="font-semibold text-purple-800 mb-3">� Historial de Detecciones</h4>
+            <div className="text-purple-700 text-sm space-y-2">
+              <div className="flex items-start">
+                <span className="text-purple-600 mr-2">1.</span>
+                <span>Ir a <strong>"Historial"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-purple-600 mr-2">2.</span>
+                <span>Ver tabla completa con todos los eventos detectados</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-purple-600 mr-2">3.</span>
+                <span>Aplicar filtros por fecha, número, cámara o tipo de evento</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-purple-600 mr-2">4.</span>
+                <span>Exportar los datos en formato CSV/Excel si es necesario</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-orange-50 p-4 rounded-lg border-l-4 border-orange-400">
+            <h4 className="font-semibold text-orange-800 mb-3">🔄 Trayectoria de una Vagoneta</h4>
+            <div className="text-orange-700 text-sm space-y-2">
+              <div className="flex items-start">
+                <span className="text-orange-600 mr-2">1.</span>
+                <span>Ingresar a <strong>"Trayectoria"</strong></span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-orange-600 mr-2">2.</span>
+                <span>Escribir el número de vagoneta que quieres rastrear</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-orange-600 mr-2">3.</span>
+                <span>Visualizar todas las detecciones en orden cronológico</span>
+              </div>
+              <div className="flex items-start">
+                <span className="text-orange-600 mr-2">4.</span>
+                <span>Descargar el reporte completo del recorrido si es necesario</span>
+              </div>            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'buenas-practicas',
+      title: ' Buenas Prácticas',
+      icon: '✨',
+      content: (
         <div className="space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
-              <h4 className="font-semibold text-blue-800 mb-2">📤 Procesar Imágenes</h4>
-              <p className="text-blue-700 text-sm">
-                Sube fotos o videos de vagonetas. El sistema detectará automáticamente los números 
-                calados y registrará la información en la base de datos.
-              </p>
-            </div>
+          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
+            <h4 className="font-semibold text-indigo-800 mb-3">🏁 Antes de Comenzar</h4>
+            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
+              <li>Verificar que MongoDB esté activo y funcionando</li>
+              <li>Usar un navegador moderno y actualizado (Chrome, Firefox, Edge)</li>
+              <li>Confirmar que los archivos de configuración estén completos</li>
+              <li>Asegurarse de tener suficiente espacio en disco para videos</li>
+            </ul>
+          </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
-              <h4 className="font-semibold text-blue-800 mb-2">📊 Consultar Historial</h4>
-              <p className="text-blue-700 text-sm">
-                Visualiza el registro histórico de detecciones. Filtra por fecha, número de vagoneta
-                o túnel específico para encontrar la información que necesitas.
-              </p>
-            </div>
+          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
+            <h4 className="font-semibold text-indigo-800 mb-3">⚡ Durante el Uso</h4>
+            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
+              <li>Mantener abiertas ambas consolas (backend y frontend)</li>
+              <li>No abrir múltiples instancias del sistema simultáneamente</li>
+              <li>Hacer pruebas con archivos pequeños antes de cargar datos reales</li>
+              <li>Monitorear el rendimiento del sistema durante uso intensivo</li>
+            </ul>
+          </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
-              <h4 className="font-semibold text-blue-800 mb-2">📹 Monitoreo en Vivo</h4>
-              <p className="text-blue-700 text-sm">
-                Configura cámaras para monitoreo en tiempo real. El sistema detectará 
-                automáticamente las vagonetas que pasen frente a la cámara.
-              </p>
-            </div>
+          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
+            <h4 className="font-semibold text-indigo-800 mb-3">📹 Con Cámaras</h4>
+            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
+              <li>Ubicarlas en zonas bien iluminadas y estables</li>
+              <li>No moverlas durante la ejecución del sistema</li>
+              <li>Verificar que estén correctamente definidas en cameras_config.json</li>
+              <li>Probar la conexión antes de iniciar monitoreo prolongado</li>
+            </ul>
+          </div>
 
-            <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
-              <h4 className="font-semibold text-blue-800 mb-2">🔄 Trayectoria</h4>
-              <p className="text-blue-700 text-sm">
-                Visualiza el recorrido completo de una vagoneta específica a través de los distintos 
-                puntos de control del sistema.
-              </p>
+          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
+            <h4 className="font-semibold text-indigo-800 mb-3">📁 Con Archivos</h4>
+            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
+              <li>Usar imágenes o videos claros y en formatos válidos (JPG, PNG, MP4, AVI)</li>
+              <li>Evitar archivos muy pesados si tu computadora es lenta</li>
+              <li>Comprobar que se vean bien los números calados antes de procesar</li>
+              <li>Organizar archivos en carpetas por fecha o evento</li>
+            </ul>
+          </div>
+
+          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
+            <h4 className="font-semibold text-indigo-800 mb-3">⚠️ Otras Sugerencias</h4>
+            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
+              <li>No modificar el código sin saber lo que estás haciendo</li>
+              <li>Pedir asistencia técnica en caso de errores persistentes</li>
+              <li>Hacer respaldos regulares si vas a reinstalar o borrar carpetas</li>
+              <li>Documentar cualquier configuración personalizada que hagas</li>
+            </ul>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'faq',
+      title: ' Preguntas Frecuentes',
+      icon: '❓',
+      content: (
+        <div className="space-y-4">
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">🗄️ ¿Qué pasa si no tengo MongoDB instalado?</h4>
+            <p className="text-red-700 text-sm">
+              No podrás ejecutar el sistema correctamente. MongoDB es necesario para almacenar 
+              los datos de detecciones. Instálalo siguiendo las instrucciones de configuración inicial.
+            </p>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">📷 ¿Puedo usar el sistema sin cámara?</h4>
+            <p className="text-red-700 text-sm">
+              ¡Sí! Puedes usar perfectamente la opción de <strong>"Carga Manual"</strong> para 
+              procesar imágenes y videos desde tu computadora sin necesidad de cámaras en tiempo real.
+            </p>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">📁 ¿Qué tipos de archivos acepta?</h4>
+            <div className="text-red-700 text-sm">
+              <p className="mb-2"><strong>Imágenes:</strong> .jpg, .png, .webp</p>
+              <p><strong>Videos:</strong> .mp4, .avi, .mov</p>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">🔍 No detecta nada, ¿qué hago?</h4>
+            <ul className="list-disc pl-5 text-red-700 text-sm space-y-1">
+              <li>Asegúrate de que el modelo YOLO esté en la carpeta backend/models/</li>
+              <li>Verifica que no haya errores al iniciar el backend</li>
+              <li>Usa imágenes más nítidas y bien iluminadas</li>
+              <li>Verifica que los números calados sean claramente visibles</li>
+            </ul>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">📹 Tengo una cámara conectada pero no aparece</h4>
+            <ul className="list-disc pl-5 text-red-700 text-sm space-y-1">
+              <li>Revisa que no esté siendo usada por otra aplicación</li>
+              <li>Verifica su configuración en el archivo cameras_config.json</li>
+              <li>Reinicia la computadora si el sistema no la detecta</li>
+              <li>Prueba desconectar y volver a conectar la cámara USB</li>
+            </ul>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
+            <h4 className="font-semibold text-red-800 mb-2">⚠️ Aparece un error en consola</h4>
+            <div className="text-red-700 text-sm">
+              <p className="mb-2">Para resolver errores:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Lee el mensaje completo del error</li>
+                <li>Busca palabras clave como "missing", "permission" o "not found"</li>
+                <li>Verifica que todos los servicios estén ejecutándose</li>
+                <li>Consulta este manual o contacta soporte técnico</li>
+              </ul>
             </div>
           </div>
         </div>
