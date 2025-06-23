@@ -39,9 +39,7 @@ const Feedback = ({ status, message, details }) => {
   );
 };
 
-const Upload = () => {
-  const [files, setFiles] = useState([]);  const [feedback, setFeedback] = useState(null);
-  const [overallProgress, setOverallProgress] = useState(0); 
+const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback, setFeedback] = useState(null);
   const [evento, setEvento] = useState("ingreso");
   // eslint-disable-next-line no-unused-vars
   const [tunel, setTunel] = useState("");
@@ -66,11 +64,9 @@ const Upload = () => {
     };
     fetchModelInfo();
   }, []);
-
   const handleChange = (e) => {
     setFiles(Array.from(e.target.files));
     setFeedback(null); // Clear previous feedback
-    setOverallProgress(0); // Reset progress
     setFileProgress({}); // Reset individual file progress
     // Limpiar event sources activos si se cambian los archivos
     Object.values(activeEventSources).forEach(source => source.close());
@@ -199,12 +195,18 @@ const Upload = () => {
         // Solo loggear eventos importantes para evitar spam
         if (data.type === 'error' || data.type === 'stream_end' || data.type === 'final_result') {
           console.log(`SSE (${fileId} - ${filename}):`, data);
-        }
-
-        if (data.type === 'status' && data.stage === 'stream_init') {
+        }        if (data.type === 'status' && data.stage === 'stream_init') {
           serverMessage = data.message || 'Stream iniciado.';
         } else if (data.type === 'progress') {
           serverMessage = `${data.message} (${data.current_frame}/${data.total_frames})`;
+          // Agregar información de progreso para mostrar barra visual
+          if (data.current_frame && data.total_frames) {
+            currentProgressState.frameProgress = {
+              current: data.current_frame,
+              total: data.total_frames,
+              percentage: Math.round((data.current_frame / data.total_frames) * 100)
+            };
+          }
         } else if (data.type === 'detection_update') {
           serverMessage = `Frame ${data.frame}: Detectado ${data.numero} (Confianza: ${(data.confianza * 100).toFixed(1)}%)`;
         } else if (data.type === 'final_result') {
@@ -347,11 +349,8 @@ const Upload = () => {
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!files.length) return;
-
-    setLoading(true);
+    if (!files.length) return;    setLoading(true);
     setFeedback(null);
-    setOverallProgress(0);
     setAllFilesResults([]);
     
     const initialFileProgress = {};
@@ -366,13 +365,9 @@ const Upload = () => {
         processingId: null
       };
     });
-    setFileProgress(initialFileProgress);
-
-    const newAbortController = new AbortController();
+    setFileProgress(initialFileProgress);    const newAbortController = new AbortController();
     setAbortController(newAbortController);
 
-    let totalUploadedSize = 0;
-    const totalSizeAllFiles = files.reduce((acc, file) => acc + file.size, 0);
     const fileIdsToProcess = Object.keys(initialFileProgress);
 
     for (let i = 0; i < fileIdsToProcess.length; i++) {
@@ -416,8 +411,7 @@ const Upload = () => {
             `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/upload-chunk/`,
             chunkFormData,
             { 
-              signal: newAbortController.signal,
-              // eslint-disable-next-line no-loop-func
+              signal: newAbortController.signal,              // eslint-disable-next-line no-loop-func
               onUploadProgress: (progressEvent) => {
                 const chunkLoaded = progressEvent.loaded; 
                 const currentFileLoaded = start + chunkLoaded;
@@ -432,17 +426,9 @@ const Upload = () => {
                     }
                   }
                 });
-                // Calcular progreso overall usando el estado actual
-                setOverallProgress(prev => {
-                  const overallLoaded = totalUploadedSize + progressEvent.loaded;
-                  return Math.round((overallLoaded / totalSizeAllFiles) * 100);
-                });
               }
-            }
-          );
+            }          );
           ChunksUploadedCurrentFile++;
-          totalUploadedSize += chunk.size; 
-          setOverallProgress(Math.round((totalUploadedSize / totalSizeAllFiles) * 100));
         } catch (err) {
           if (axios.isCancel(err)) {
             setFeedback({ status: "error", message: `Carga cancelada para ${file.name}.` });
@@ -630,15 +616,7 @@ const Upload = () => {
         <div className="mt-6">
           <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
         </div>
-      )}      {loading && overallProgress > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-medium text-slate-700 mb-3">Progreso Total de Subida</h3>
-          <div className="w-full bg-slate-200 rounded-full h-2">
-            <div className="bg-orange-500 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallProgress}%` }}></div>
-          </div>
-          <p className="text-sm text-slate-600 text-center mt-2">{overallProgress}%</p>
-        </div>
-      )}      {Object.keys(fileProgress).length > 0 && (
+      )}{Object.keys(fileProgress).length > 0 && (
         <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-6">
           <h3 className="text-xl font-medium text-slate-800 mb-4 pb-3 border-b border-slate-200">
             Detalle del Procesamiento:
@@ -700,9 +678,24 @@ const Upload = () => {
                         style={{ width: `${individualProgressPercent}%` }}
                       ></div>
                     </div>
-                  )}
-                  {progress.status === 'uploading' && progress.total > 0 && (
+                  )}                  {progress.status === 'uploading' && progress.total > 0 && (
                     <p className="text-xs text-slate-500 text-right">{individualProgressPercent}% subido</p>
+                  )}
+
+                  {/* Barra de progreso para procesamiento de video por frame */}
+                  {progress.status === 'server_processing' && progress.frameProgress && (
+                    <div className="mt-2">
+                      <div className="flex justify-between text-xs text-purple-600 mb-1">
+                        <span>Procesando frames</span>
+                        <span>{progress.frameProgress.current}/{progress.frameProgress.total} ({progress.frameProgress.percentage}%)</span>
+                      </div>
+                      <div className="w-full bg-purple-200 rounded-full h-2">
+                        <div
+                          className="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${progress.frameProgress.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
                   )}
 
                   {progress.serverMessage && (
