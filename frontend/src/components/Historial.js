@@ -24,6 +24,14 @@ const Historial = () => {
   // Nuevo estado para agrupación
   const [agruparPorNumero, setAgruparPorNumero] = useState(true); // Por defecto agrupado
   const [maxPorNumero, setMaxPorNumero] = useState(2);
+
+  // Helper function para determinar el túnel
+  const getTunel = (item) => {
+    if (item.tunel) return item.tunel;
+    // Túnel 1 para procesamiento de imágenes y videos
+    const procesamientoOrigins = ['image_upload', 'image_upload_multiple', 'image_chunk_upload', 'video_processing'];
+    return procesamientoOrigins.includes(item.origen_deteccion) ? '1' : '2';
+  };
   const fetchHistorial = useCallback(async (page = 1, resetData = false) => {
     setLoading(true);
     setError('');
@@ -141,11 +149,11 @@ const Historial = () => {
     setAgruparPorNumero(true);
     setMaxPorNumero(2);
   };
-
   const downloadCSV = () => {
-    const headers = ["N°", "Evento", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
+    const headers = ["Numero Detectado", "Evento", "Túnel", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
       item.numero_detectado || 'N/A',
       item.evento,
+      getTunel(item),
       item.modelo_ladrillo || 'N/A',
       item.confianza ? (item.confianza * 100).toFixed(1) : 
       item.confianza_numero ? (item.confianza_numero * 100).toFixed(1) : 
@@ -261,12 +269,23 @@ const Historial = () => {
             </select>
           </div>
         )}
-        
-        <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500">
           {agruparPorNumero 
             ? `📊 Mostrando máximo ${maxPorNumero} registro(s) por número (los de mayor confianza)`
             : "📄 Mostrando todos los registros sin agrupación"
           }
+        </div>
+        
+        <div className="text-xs text-slate-400 mt-2 flex items-center gap-4">
+          <span>📝 Referencia túneles:</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-purple-100 border border-purple-200 rounded"></span>
+            <span>1 = Proc. Imágenes</span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-teal-100 border border-teal-200 rounded"></span>
+            <span>2 = Monitor Vivo</span>
+          </span>
         </div>
       </div>      <div className="overflow-x-auto">
         <table className="min-w-full bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -276,10 +295,12 @@ const Historial = () => {
                 className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('numero_detectado')}
               >
-                N° {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                Numero Detectado {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+              </th>              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                Evento
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                Evento
+                Túnel
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Modelo
@@ -308,14 +329,20 @@ const Historial = () => {
                   <span className="text-lg font-bold text-orange-600">
                     {item.numero_detectado || 'N/A'}
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                </td>                <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                     item.evento === 'ingreso' 
                       ? 'bg-green-100 text-green-800' 
                       : 'bg-blue-100 text-blue-800'
                   }`}>
                     {item.evento}
+                  </span>
+                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                    getTunel(item) === '1'
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-teal-100 text-teal-800'
+                  }`}>
+                    {getTunel(item)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
