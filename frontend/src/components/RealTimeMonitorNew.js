@@ -288,7 +288,10 @@ const RealTimeMonitorNew = () => {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 bg-cyan-50 min-h-screen">      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-cyan-800">📊 Monitor en Tiempo Real</h1>        <div className="flex items-center space-x-4">
+        <h1 className="text-3xl font-bold text-cyan-800">📊 Monitor en Tiempo Real</h1>
+        {/* Indicadores de WebSocket ocultos por petición del usuario */}
+        {/*
+        <div className="flex items-center space-x-4">
           <button 
             onClick={() => {
               reconnectAttempts.current = 0; // Resetear contador
@@ -298,7 +301,8 @@ const RealTimeMonitorNew = () => {
             title={isConnected ? "Conexión WebSocket activa" : "Hacer click para reconectar WebSocket"}
           >
             {isConnected ? '🟢 Conectado' : reconnectAttempts.current >= maxReconnectAttempts ? '🔴 Reconectar' : '🟡 Conectando...'}
-          </button>          <div className="flex items-center space-x-2">
+          </button>
+          <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">
               {isConnected 
                 ? 'WebSocket Activo' 
@@ -316,6 +320,7 @@ const RealTimeMonitorNew = () => {
             }`}></div>
           </div>
         </div>
+        */}
       </div><div className="bg-white rounded-lg p-6 mb-6 shadow-sm border-l-4 border-purple-500">
         <h2 className="text-xl font-bold text-purple-800 mb-4">🎥 Control de Cámaras</h2>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">          <div className="col-span-2 md:col-span-1">
@@ -326,14 +331,17 @@ const RealTimeMonitorNew = () => {
                 <option key={camera.camera_id} value={camera.camera_id}>{camera.camera_id} ({camera.tunel})</option>
               ))}
             </select>
-          </div>
-          <div>
+          </div>          <div>
             <button onClick={isMonitoring ? stopMonitoring : startMonitoring} disabled={!selectedCamera || isLoadingData} className={`w-full px-4 py-2 rounded-md font-medium ${!selectedCamera || isLoadingData ? 'bg-gray-300' : isMonitoring ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
               {isMonitoring ? '⏹️ Detener' : '▶️ Iniciar'}
             </button>
-          </div>          <div>
+          </div>
+          {/* Botones ocultos por petición del usuario */}
+          {/*
+          <div>
             <button onClick={getSystemInfo} className="w-full px-4 py-2 rounded-md font-medium bg-blue-500 text-white hover:bg-blue-600">🔍 Info Cámaras</button>
-          </div>          <div>
+          </div>
+          <div>
             <button onClick={checkMonitorStatus} className="w-full px-4 py-2 rounded-md font-medium bg-purple-500 text-white hover:bg-purple-600">📊 Estado</button>
           </div>
           <div>
@@ -342,6 +350,7 @@ const RealTimeMonitorNew = () => {
           <div>
             <button onClick={forceReconnectWebSocket} className="w-full px-4 py-2 rounded-md font-medium bg-yellow-500 text-white hover:bg-yellow-600">🔄 Reconectar</button>
           </div>
+          */}
           <div className="text-center">
             <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${isMonitoring ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
               <div className={`w-2 h-2 rounded-full mr-2 ${isMonitoring ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
