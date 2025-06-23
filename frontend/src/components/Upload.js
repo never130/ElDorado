@@ -565,9 +565,7 @@ const Upload = () => {
               Soporta imágenes (JPG, PNG) y videos (MP4, AVI)
             </p>
           </label>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        </div>        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
           <div>
             <label htmlFor="evento" className="block text-sm font-medium text-gray-700">Evento</label>
             <select id="evento" value={evento} onChange={(e) => setEvento(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500">
@@ -576,6 +574,8 @@ const Upload = () => {
               <option value="otro">Otro</option>
             </select>
           </div>
+          {/* Campos ocultos por petición del usuario */}
+          {/*
           <div>
             <label htmlFor="tunel" className="block text-sm font-medium text-gray-700">Túnel (Opcional)</label>
             <input type="text" id="tunel" value={tunel} onChange={(e) => setTunel(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: Principal, Secundario" />
@@ -584,6 +584,7 @@ const Upload = () => {
             <label htmlFor="merma" className="block text-sm font-medium text-gray-700">Merma (Opcional)</label>
             <input type="text" id="merma" value={merma} onChange={(e) => setMerma(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: 10%" />
           </div>
+          */}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-4">
