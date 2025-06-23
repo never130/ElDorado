@@ -166,10 +166,9 @@ const Historial = () => {
     link.click();
     document.body.removeChild(link);
   };
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
+      <div className="flex justify-center items-center min-h-[400px]">
         <Spinner size={40} />
       </div>
     );
@@ -177,26 +176,25 @@ const Historial = () => {
 
   if (error) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-red-500 text-center">
-          <p className="text-xl font-semibold mb-2">Error</p>
-          <p>{error}</p>
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-xl font-medium text-slate-900 mb-2">Error</p>
+          <p className="text-slate-600 mb-4">{error}</p>
           <button 
             onClick={() => fetchHistorial(1, true)} 
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-all"
+            className="inline-flex items-center px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
           >
-            <FaRedo className="inline mr-2" />
+            <FaRedo className="mr-2 h-4 w-4" />
             Reintentar
           </button>
         </div>
       </div>
     );
   }
-
   return (
-    <div className="bg-white shadow-lg rounded-lg p-6">
+    <div className="bg-white border border-slate-200 rounded-lg p-6">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-gray-800">📊 Historial de Detecciones</h2>
+        <h2 className="text-2xl font-bold text-slate-900">📊 Historial de Detecciones</h2>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
           <input
@@ -204,7 +202,7 @@ const Historial = () => {
             placeholder="Buscar por número..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
           />
           
           <input
@@ -212,50 +210,50 @@ const Historial = () => {
             placeholder="Fecha inicio"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
           />
-            <input
+          
+          <input
             type="date"
             placeholder="Fecha fin"
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
           />
           
           <button 
             onClick={clearFilters}
-            className="px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-all whitespace-nowrap"
+            className="px-3 py-2 bg-slate-600 text-white font-medium rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors whitespace-nowrap"
           >
             Limpiar
           </button>
         </div>
       </div>
-      
-      {/* Controles de agrupación */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+        {/* Controles de agrupación */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
             id="agrupar"
             checked={agruparPorNumero}
             onChange={(e) => setAgruparPorNumero(e.target.checked)}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
           />
-          <label htmlFor="agrupar" className="text-sm font-medium text-gray-700">
+          <label htmlFor="agrupar" className="text-sm font-medium text-slate-700">
             Agrupar duplicados
           </label>
         </div>
         
         {agruparPorNumero && (
           <div className="flex items-center gap-2">
-            <label htmlFor="maxPorNumero" className="text-sm text-gray-600">
+            <label htmlFor="maxPorNumero" className="text-sm text-slate-600">
               Máximo por número:
             </label>
             <select
               id="maxPorNumero"
               value={maxPorNumero}
               onChange={(e) => setMaxPorNumero(parseInt(e.target.value))}
-              className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2 py-1 border border-slate-300 rounded-md text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             >
               <option value={1}>1</option>
               <option value={2}>2</option>
@@ -264,56 +262,55 @@ const Historial = () => {
           </div>
         )}
         
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-slate-500">
           {agruparPorNumero 
             ? `📊 Mostrando máximo ${maxPorNumero} registro(s) por número (los de mayor confianza)`
             : "📄 Mostrando todos los registros sin agrupación"
           }
         </div>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50">
+      </div>      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <thead className="bg-slate-50">
             <tr>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('numero_detectado')}
               >
                 N° {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Evento
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Modelo
-              </th>              <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              </th>
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('confianza')}
               >
                 Confianza {sortConfig.key === 'confianza' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('timestamp')}
               >
                 Fecha {sortConfig.key === 'timestamp' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Imagen
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white divide-y divide-slate-200">
             {sortedHistorial.map((item, index) => (
-              <tr key={item._id || index} className="hover:bg-gray-50 transition-colors">
+              <tr key={item._id || index} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-lg font-bold text-blue-600">
+                  <span className="text-lg font-bold text-orange-600">
                     {item.numero_detectado || 'N/A'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                     item.evento === 'ingreso' 
                       ? 'bg-green-100 text-green-800' 
                       : 'bg-blue-100 text-blue-800'
@@ -321,26 +318,29 @@ const Historial = () => {
                     {item.evento}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                   {item.modelo_ladrillo || 'N/A'}
-                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                   {item.confianza ? `${(item.confianza * 100).toFixed(1)}%` : 
                    item.confianza_numero ? `${(item.confianza_numero * 100).toFixed(1)}%` : 
                    item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : 
                    'N/A'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                   {new Date(item.timestamp).toLocaleString('es-ES', {
                     year: 'numeric', month: '2-digit', day: '2-digit',
                     hour: '2-digit', minute: '2-digit', second: '2-digit'
                   })}
-                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                   {item.imagen_path ? (
                     <div className="flex items-center gap-2">
                       <img 
                         src={`http://localhost:8000/${item.imagen_path}`}
                         alt={`Detección ${item.numero_detectado || 'N/A'}`}
-                        className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-gray-200"                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
+                        className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-slate-200"
+                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
                         onError={(e) => {
                           e.target.style.display = 'none';
                           e.target.nextSibling.style.display = 'inline-block';
@@ -348,35 +348,33 @@ const Historial = () => {
                       />
                       <button
                         onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
-                        className="text-blue-600 hover:text-blue-800 underline text-xs hidden"
+                        className="text-orange-600 hover:text-orange-800 underline text-xs hidden"
                       >
                         Ver imagen
                       </button>
                     </div>
                   ) : (
-                    <span className="text-gray-400 italic text-xs">Sin imagen</span>
+                    <span className="text-slate-400 italic text-xs">Sin imagen</span>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Información de paginación y controles */}
-      <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+      </div>      {/* Información de paginación y controles */}
+      <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-4">
           <button 
             onClick={downloadCSV} 
-            className="flex items-center bg-green-600 text-white px-4 py-2 rounded-md shadow hover:bg-green-500 transition-all"
+            className="inline-flex items-center px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
           >
-            <FaFileCsv className="mr-2" />
+            <FaFileCsv className="mr-2 h-4 w-4" />
             Descargar CSV
           </button>
         </div>
         
         <div className="flex items-center gap-4">
-          <span className="text-gray-500 text-sm">
+          <span className="text-slate-500 text-sm">
             Página {currentPage} | Mostrando {sortedHistorial.length} de {totalRecords} registros
           </span>
           
@@ -384,7 +382,7 @@ const Historial = () => {
             <button 
               onClick={handlePreviousPage}
               disabled={currentPage === 1 || loading}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-all"
+              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
             >
               ← Anterior
             </button>
@@ -392,27 +390,25 @@ const Historial = () => {
             <button 
               onClick={handleNextPage}
               disabled={!hasMore || loading}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-all"
+              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
             >
               Siguiente →
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Modal para mostrar imagen ampliada */}
+      </div>      {/* Modal para mostrar imagen ampliada */}
       {selectedImage && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setSelectedImage(null)}>
           <div className="relative max-w-4xl max-h-full p-4">
             <img 
               src={selectedImage} 
               alt="Imagen ampliada" 
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-full object-contain rounded-lg"
               onClick={(e) => e.stopPropagation()}
             />
             <button 
               onClick={() => setSelectedImage(null)}
-              className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-700 transition-colors"
+              className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
             >
               ✕
             </button>

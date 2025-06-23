@@ -11,10 +11,10 @@ import "./App.css";
 
 const App = () => {
   const [view, setView] = useState("upload");
-
   return (
-    <div className="w-full min-h-screen flex flex-col bg-cyan-50">
-      <Navbar view={view} setView={setView} />      <main className="w-full flex-1 flex flex-col items-center">
+    <div className="w-full min-h-screen flex flex-col bg-slate-50">
+      <Navbar view={view} setView={setView} />
+      <main className="w-full flex-1 flex flex-col items-center p-6">
         {view === "upload" && <Upload />}
         {view === "historial" && <Historial />}
         {view === "realtime" && <RealTimeMonitorNew />}
