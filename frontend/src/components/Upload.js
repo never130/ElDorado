@@ -44,7 +44,7 @@ const Upload = () => {
     // Cargar información del modelo
     const fetchModelInfo = async () => {
       try {
-        const response = await axios.get('http://localhost:8000/model/info');
+        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/model/info`);
         setModelInfo(response.data);
       } catch (error) {
         console.error('Error loading model info:', error);
@@ -165,7 +165,7 @@ const Upload = () => {
   }, [files, fileProgress, activeEventSources, allFilesResults]);
 
   const setupEventSource = useCallback((fileId, processingId, filename) => {
-    const eventSource = new EventSource(`http://localhost:8000/stream-video-processing/${processingId}`);
+    const eventSource = new EventSource(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/stream-video-processing/${processingId}`);
     setActiveEventSources(prev => ({ ...prev, [fileId]: eventSource }));
 
     eventSource.onopen = () => {
@@ -399,7 +399,7 @@ const Upload = () => {
 
         try {
           await axios.post(
-            "http://localhost:8000/upload-chunk/",
+            `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/upload-chunk/`,
             chunkFormData,
             { 
               signal: newAbortController.signal,
@@ -457,7 +457,7 @@ const Upload = () => {
 
         try {
           const res = await axios.post(
-            "http://localhost:8000/finalize-upload/",
+            `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/finalize-upload/`,
             finalizeFormData,
             { signal: newAbortController.signal }
           );
