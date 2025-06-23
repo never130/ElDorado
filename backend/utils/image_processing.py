@@ -61,12 +61,15 @@ except Exception as e:
 class ImageProcessor:
     def __init__(self, model_path: Optional[str] = None): # Hacer model_path opcional
         """Inicializa el procesador de imágenes con YOLOv8"""
-        if model_path is None:            # Construir la ruta al modelo desde la ubicación de este archivo (backend/utils/image_processing.py)
+        if model_path is None:
+            # Construir la ruta al modelo desde la ubicación de este archivo (backend/utils/image_processing.py)
             # Sube tres niveles para llegar a la raíz del proyecto (ElDorado)
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))              # Construye la ruta al modelo dentro de backend/models/numeros_enteros
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            # Construye la ruta al modelo dentro de backend/models/numeros_enteros
             model_path = os.path.join(project_root, "backend", "models", "numeros_enteros", "yolo_model", "training", "best.pt")
 
-        if not os.path.exists(model_path):            raise FileNotFoundError(
+        if not os.path.exists(model_path):            
+            raise FileNotFoundError(
                 f"El archivo del modelo YOLOv8 no se encontró en la ruta: {model_path}. "
                 f"Verifica que el archivo \'best.pt\' exista en \'ElDorado\\backend\\models\\numeros_enteros\\yolo_model\\training\\\'.")
         
@@ -74,6 +77,7 @@ class ImageProcessor:
         self.model = YOLO(model_path)
         self.last_detection = None
         self.min_confidence = 0.25  # Incrementado para reducir falsos positivos
+        self.umbral_agrupacion = 50  # Valor por defecto para agrupación de números
 
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """Preprocesa la imagen para mejorar la detección"""
@@ -189,7 +193,9 @@ def run_detection_on_path(image_path: str) -> Dict[str, Any]:
         print(f"Error: No se pudo cargar la imagen desde {image_path}")
         return {}
     
-    return processor.detect_objects_unified(image)
+    # Usar el umbral_agrupacion configurado o valor por defecto
+    umbral_agrupacion = getattr(processor, 'umbral_agrupacion', 50)
+    return processor.detect_objects_unified(image, umbral_agrupacion)
 
 def run_detection_on_frame(frame: np.ndarray) -> Dict[str, Any]:
     """
@@ -204,5 +210,7 @@ def run_detection_on_frame(frame: np.ndarray) -> Dict[str, Any]:
     if frame is None or frame.size == 0:
         print("Error: El frame de entrada está vacío o es None.")
         return {}
-        
-    return processor.detect_objects_unified(frame)
+    
+    # Usar el umbral_agrupacion configurado o valor por defecto
+    umbral_agrupacion = getattr(processor, 'umbral_agrupacion', 50)
+    return processor.detect_objects_unified(frame, umbral_agrupacion)
