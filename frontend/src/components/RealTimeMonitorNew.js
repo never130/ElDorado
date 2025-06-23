@@ -1,17 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
-const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections] = useState([]);
+const RealTimeMonitorNew = () => {
+  // API Base URL configuration
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  
+  const [recentDetections, setRecentDetections] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState('');
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [monitorError, setMonitorError] = useState('');
   // eslint-disable-next-line no-unused-vars
   const [isConnected, setIsConnected] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);const [systemInfo, setSystemInfo] = useState(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);  const [systemInfo, setSystemInfo] = useState(null);
   const [showSystemInfo, setShowSystemInfo] = useState(false);
   const [debugInfo, setDebugInfo] = useState(null);
-  const [pingInterval, setPingInterval] = useState(null);
+  const pingIntervalRef = useRef(null);
   const ws = useRef(null);
   const wsReconnectTimeout = useRef(null);
   const reconnectAttempts = useRef(0);
@@ -28,9 +32,10 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
       ws.current.close(1000, 'Reconnecting');
     }
     
-    try {
-      console.log('🔌 Intentando conectar WebSocket...');
-      ws.current = new WebSocket('ws://localhost:8000/ws/detections');
+    try {      console.log('🔌 Intentando conectar WebSocket...');
+      const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws/detections';
+      console.log('🔌 Conectando a:', wsUrl);
+      ws.current = new WebSocket(wsUrl);
       
       ws.current.onopen = () => {
         console.log('🔌✅ WebSocket conectado exitosamente');
@@ -47,9 +52,8 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
           if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             console.log('📍 Enviando ping al WebSocket...');
             ws.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
-          }
-        }, 30000); // Ping cada 30 segundos
-        setPingInterval(interval);
+          }        }, 30000); // Ping cada 30 segundos
+        pingIntervalRef.current = interval;
       };ws.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
@@ -142,10 +146,10 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
         wsReconnectTimeout.current = setTimeout(connectWebSocket, delay);
       }
     }
-  }, []);const loadInitialData = useCallback(async () => {
+  }, []);  const loadInitialData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const camerasRes = await axios.get('http://localhost:8000/cameras/list');
+      const camerasRes = await axios.get(`${API_BASE_URL}/cameras/list`);
       // Asegurarse de que estamos accediendo a cameras.cameras (el array dentro del objeto)
       const camerasArray = camerasRes.data && camerasRes.data.cameras ? camerasRes.data.cameras : [];
       setAvailableCameras(camerasArray);
@@ -156,7 +160,7 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
       }
       
       // Cargar detecciones recientes del historial (solo las primeras 10)
-      const historyRes = await axios.get('http://localhost:8000/historial/?limit=10');
+      const historyRes = await axios.get(`${API_BASE_URL}/historial/?limit=10`);
       const historialDetections = historyRes.data.registros || [];
       
       // Mezclar con las detecciones en vivo ya existentes (si las hay)
@@ -172,25 +176,41 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
       console.log('📊 Detecciones del historial cargadas:', historialDetections.length);
     } catch (error) {
       console.error('Error al cargar datos iniciales:', error);
-      setMonitorError('No se pudo conectar con el backend. Verifique que esté en ejecución.');
-    } finally {
+      setMonitorError('No se pudo conectar con el backend. Verifique que esté en ejecución.');    } finally {
       setIsLoadingData(false);
     }
-  }, []);
-  useEffect(() => {
+  }, [API_BASE_URL]);useEffect(() => {
     loadInitialData();
     connectWebSocket();    return () => {
-      if (ws.current) ws.current.close(1000, 'Component unmounting');
-      if (wsReconnectTimeout.current) clearTimeout(wsReconnectTimeout.current);
-      if (pingInterval) clearInterval(pingInterval);
+      // Cleanup function to prevent memory leaks and connection issues
+      console.log('🧹 Cleanup: Component unmounting');
+      
+      // Close WebSocket connection
+      if (ws.current) {
+        ws.current.close(1000, 'Component unmounting');
+        ws.current = null;
+      }
+      
+      // Clear timeouts and intervals
+      if (wsReconnectTimeout.current) {
+        clearTimeout(wsReconnectTimeout.current);
+        wsReconnectTimeout.current = null;
+      }
+        if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+      
+      // Reset reconnection attempts
+      reconnectAttempts.current = 0;
     };
-  }, [loadInitialData, connectWebSocket, pingInterval]);
+  }, [loadInitialData, connectWebSocket]); // Removed pingInterval dependency to prevent loop
   const startMonitoring = async () => {
     if (!selectedCamera) return;
     setMonitorError('');
     setDebugInfo(null);
     try {
-      const response = await axios.post(`http://localhost:8000/monitor/start/${selectedCamera}`);
+      const response = await axios.post(`${API_BASE_URL}/monitor/start/${selectedCamera}`);
       setIsMonitoring(true);
       console.log('✅ Monitoreo iniciado exitosamente:', response.data);
     } catch (error) {
@@ -210,7 +230,7 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
   const stopMonitoring = async () => {
     if (!selectedCamera) return;
     try {
-      await axios.post(`http://localhost:8000/monitor/stop/${selectedCamera}`);
+      await axios.post(`${API_BASE_URL}/monitor/stop/${selectedCamera}`);
       setIsMonitoring(false);
       setMonitorError('');
       console.log('✅ Monitoreo detenido exitosamente');
@@ -230,7 +250,7 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
   // eslint-disable-next-line no-unused-vars
   const getSystemInfo = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/cameras/system-info');
+      const response = await axios.get(`${API_BASE_URL}/cameras/system-info`);
       setSystemInfo(response.data);
       setShowSystemInfo(true);
       console.log('📊 Info del sistema obtenida:', response.data);
@@ -238,19 +258,18 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
       console.error('❌ Error al obtener info del sistema:', error);
       // Intentar con endpoint alternativo si el primero falla
       try {
-        const altResponse = await axios.get('http://localhost:8000/cameras/info');
+        const altResponse = await axios.get(`${API_BASE_URL}/cameras/info`);
         setSystemInfo(altResponse.data);
         setShowSystemInfo(true);
         console.log('📊 Info del sistema obtenida (endpoint alternativo):', altResponse.data);
       } catch (altError) {
         setMonitorError('Error al obtener info del sistema. Endpoint no disponible.');
-        console.error('❌ Error en endpoint alternativo:', altError);
-      }
+        console.error('❌ Error en endpoint alternativo:', altError);      }
     }
-  }, []);  // eslint-disable-next-line no-unused-vars
+  }, [API_BASE_URL]);  // eslint-disable-next-line no-unused-vars
   const checkWebSocketStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/websocket/status');
+      const response = await axios.get(`${API_BASE_URL}/websocket/status`);
       console.log('📊 Estado WebSocket:', response.data);
       alert(`WebSocket Status:\nConexiones activas: ${response.data.active_connections}\nDetalles: ${JSON.stringify(response.data.connections_details, null, 2)}`);
     } catch (error) {
@@ -270,7 +289,7 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
 
   // eslint-disable-next-line no-unused-vars
   const checkMonitorStatus = async () => {    try {
-      const response = await axios.get('http://localhost:8000/monitor/status');
+      const response = await axios.get(`${API_BASE_URL}/monitor/status`);
       const activeMonitors = response.data.active_monitors || [];
       const isWebcamActive = activeMonitors.some(m => m.camera_id === selectedCamera);
       setIsMonitoring(isWebcamActive);
@@ -394,7 +413,7 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
                 {selectedCamera ? (
                     <div className="w-full h-full relative">
                         <img 
-                            src={`http://localhost:8000/video/stream/${selectedCamera}?t=${Date.now()}`} 
+                            src={`${API_BASE_URL}/video/stream/${selectedCamera}?t=${Date.now()}`} 
                             alt="Transmisión en vivo"
                             className="w-full h-full object-cover rounded-md"
                             onError={(e) => {
@@ -517,12 +536,11 @@ const RealTimeMonitorNew = () => {  const [recentDetections, setRecentDetections
                   </div>
                   
                   {det.imagen_path && (
-                    <div className="mt-2">
-                      <img 
-                        src={`http://localhost:8000/${det.imagen_path}`}
+                    <div className="mt-2">                      <img 
+                        src={`${API_BASE_URL}/${det.imagen_path}`}
                         alt={`Detección ${det.id}`}
                         className="w-full h-20 object-cover rounded border cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
-                        onClick={() => window.open(`http://localhost:8000/${det.imagen_path}`, '_blank')}
+                        onClick={() => window.open(`${API_BASE_URL}/${det.imagen_path}`, '_blank')}
                         title="Click para ver imagen completa"
                       />
                       <div className="text-xs text-gray-400 mt-1 text-center">
