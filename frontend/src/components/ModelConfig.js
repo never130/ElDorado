@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './ModelConfig.css';
 
 const ModelConfig = () => {
-  const [config, setConfig] = useState({
+  // API Base URL configuration
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const [config, setConfig] = useState({
     min_confidence: 0.25,
     usar_agrupacion: true,
     umbral_agrupacion: 50,
@@ -11,41 +13,98 @@ const ModelConfig = () => {
   });
   const [modelInfo, setModelInfo] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetchModelInfo();
-  }, []);
-
-  const fetchModelInfo = async () => {
+  const [notification, setNotification] = useState(null);  const fetchModelInfo = useCallback(async () => {
     try {
-      const response = await axios.get('http://localhost:8000/model/info');
+      const response = await axios.get(`${API_BASE_URL}/model/info`);
       setModelInfo(response.data);
+      
+      // Sincronizar el estado local con la configuración actual del modelo
+      setConfig(prevConfig => ({
+        ...prevConfig,
+        min_confidence: response.data.confidence_threshold,
+        umbral_agrupacion: response.data.umbral_agrupacion || 50
+      }));
     } catch (error) {
       console.error('Error fetching model info:', error);
     }
-  };
+  }, [API_BASE_URL]);
 
+  useEffect(() => {
+    fetchModelInfo();
+  }, [fetchModelInfo]);
   const updateConfig = async (newConfig) => {
     setLoading(true);
+    setNotification(null);
     try {
-      await axios.post('http://localhost:8000/model/config', newConfig);
+      await axios.post(`${API_BASE_URL}/model/config`, newConfig);
       setConfig(newConfig);
+      setNotification({
+        type: 'success',
+        message: 'Configuración del modelo actualizada exitosamente'
+      });
+      console.log('✅ Configuración del modelo actualizada');
+      
+      // Refrescar la información del modelo
+      await fetchModelInfo();
+      
+      // Auto-ocultar la notificación después de 3 segundos
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
     } catch (error) {
       console.error('Error updating config:', error);
+      setNotification({
+        type: 'error',
+        message: '❌ Error al actualizar la configuración del modelo'
+      });
+      
+      // Auto-ocultar la notificación de error después de 5 segundos
+      setTimeout(() => {
+        setNotification(null);
+      }, 5000);
     }
     setLoading(false);
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-lg mt-6 mb-8 border border-cyan-200">
-      <div className="text-center mb-6">
+    <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-lg mt-6 mb-8 border border-cyan-200">      <div className="text-center mb-6">
         <h2 className="text-3xl font-extrabold text-purple-600 mb-2">
           🧠 Configuración del Modelo IA
-        </h2>
-        <p className="text-gray-600">
-          Ajusta los parámetros del modelo YOLOv8 NumerosCalados
+        </h2>        <p className="text-gray-600">
+          Ajusta los parámetros principales del modelo YOLOv8: confianza y agrupación de números/ladrillos
         </p>
-      </div>      {/* Información del Modelo */}
+      </div>
+
+      {/* Notificación */}
+      {notification && (
+        <div className={`mb-6 p-4 rounded-lg border-l-4 ${
+          notification.type === 'success' 
+            ? 'bg-green-50 border-green-400 text-green-700' 
+            : 'bg-red-50 border-red-400 text-red-700'
+        }`}>
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              {notification.type === 'success' ? (
+                <div className="text-green-500 text-lg">✅</div>
+              ) : (
+                <div className="text-red-500 text-lg">❌</div>
+              )}
+            </div>
+            <div className="ml-3">
+              <p className="font-medium">{notification.message}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setNotification(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <span className="sr-only">Cerrar</span>
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}{/* Información del Modelo */}
       {modelInfo && (
         <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 mb-6">
           <h3 className="text-xl font-bold text-purple-700 mb-4">📊 Estado del Modelo</h3>
@@ -112,9 +171,8 @@ const ModelConfig = () => {
               <span>Muy Lejano (200px)</span>
             </div>
           </div>
-        </div>
-
-        {/* Opciones de Modo */}
+        </div>        {/* Opciones de Modo - OCULTAS POR NO ESTAR IMPLEMENTADAS */}
+        {/* 
         <div className="space-y-4">
           <div className="flex items-center space-x-4">
             <input
@@ -142,6 +200,7 @@ const ModelConfig = () => {
             </select>
           </div>
         </div>
+        */}
 
         {/* Botón de Aplicar */}
         <div className="text-center pt-4">
@@ -164,7 +223,7 @@ const ModelConfig = () => {
 
       {/* Clases Detectables */}
       {modelInfo?.classes && (          <div className="mt-8 p-6 bg-gray-50 rounded-xl">
-            <h3 className="text-lg font-bold text-gray-700 mb-4">🎯 Números Calados Detectables</h3>
+            <h3 className="text-lg font-bold text-gray-700 mb-4">Números y ladrillos detectables</h3>
             <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
               {modelInfo.classes.map((cls, idx) => (
                 <div key={idx} className="bg-white px-3 py-2 rounded-lg text-center font-mono text-sm border number-badge hover:bg-purple-50 hover:border-purple-300">

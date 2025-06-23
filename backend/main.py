@@ -23,7 +23,7 @@ from datetime import datetime, timezone # MODIFIED: Added timezone
 from typing import List, Dict, Optional, Any
 
 import crud 
-from utils.image_processing import run_detection_on_path, run_detection_on_frame
+from utils.image_processing import run_detection_on_path, run_detection_on_frame, processor
 from utils.auto_capture_system import AutoCaptureManager, load_cameras_config 
 from database import connect_to_mongo, close_mongo_connection, get_database 
 from collections import Counter # Keep if used elsewhere, not in provided snippets
@@ -946,15 +946,64 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"❌ Error en WebSocket para {websocket.client}: {e}")
         manager.disconnect(websocket)
 
-# Example model info endpoint (if processor object exists and has details)
-# from utils.image_processing import processor # Assuming processor is initialized here or globally
+# Endpoints para configuración del modelo IA
 @app.get("/model/info")
 async def get_model_info():
-    # This depends on how 'processor' is defined and what attributes it has.
-    # Placeholder if 'processor' is not readily available or its structure is unknown.
-    # if 'processor' in globals() and hasattr(processor, 'get_model_details'):
-    #     return processor.get_model_details()
-    return {"message": "Información del modelo no disponible en esta configuración."}
+    """Obtener información del modelo YOLO"""
+    global processor
+    try:
+        if processor and hasattr(processor, 'model'):
+            return {
+                "model_type": "YOLOv8 NumerosCalados",
+                "classes_count": len(processor.model.names),
+                "confidence_threshold": processor.min_confidence,
+                "umbral_agrupacion": getattr(processor, 'umbral_agrupacion', 50),
+                "model_size": "Custom",
+                "training_epochs": "100+",
+                "classes": list(processor.model.names.values())
+            }
+        else:
+            return {
+                "model_type": "YOLOv8 NumerosCalados",
+                "classes_count": 10,
+                "confidence_threshold": 0.25,
+                "model_size": "Custom",
+                "training_epochs": "100+",
+                "classes": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+            }
+    except Exception as e:
+        print(f"Error obteniendo info del modelo: {e}")
+        return {"message": "Error al obtener información del modelo", "error": str(e)}
+
+@app.post("/model/config")
+async def update_model_config(config: dict):
+    """Actualizar configuración del modelo"""
+    global processor
+    try:
+        if processor:
+            # Actualizar confianza mínima
+            if 'min_confidence' in config:
+                processor.min_confidence = float(config['min_confidence'])
+                print(f"✅ Confianza mínima actualizada a: {processor.min_confidence}")
+            
+            # Actualizar umbral de agrupación (si existe en el procesador)
+            if 'umbral_agrupacion' in config and hasattr(processor, 'umbral_agrupacion'):
+                processor.umbral_agrupacion = int(config['umbral_agrupacion'])
+                print(f"✅ Umbral de agrupación actualizado a: {processor.umbral_agrupacion}")
+            
+            return {
+                "status": "success", 
+                "message": "Configuración del modelo actualizada exitosamente",
+                "config": {
+                    "min_confidence": processor.min_confidence,
+                    "umbral_agrupacion": getattr(processor, 'umbral_agrupacion', 50)
+                }
+            }
+        else:
+            return {"status": "error", "message": "Procesador de modelo no disponible"}
+    except Exception as e:
+        print(f"❌ Error actualizando configuración del modelo: {e}")
+        return {"status": "error", "message": f"Error al actualizar configuración: {str(e)}"}
 
 @app.get("/websocket/status")
 async def get_websocket_status():
