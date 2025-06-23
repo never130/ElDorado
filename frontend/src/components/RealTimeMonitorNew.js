@@ -307,47 +307,23 @@ const RealTimeMonitorNew = () => {
       setMonitorError('Error al verificar estado del monitor');
     }
   };
-
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 bg-cyan-50 min-h-screen">      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-cyan-800">📊 Monitor en Tiempo Real</h1>
-        {/* Indicadores de WebSocket ocultos por petición del usuario */}
-        {/*
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => {
-              reconnectAttempts.current = 0; // Resetear contador
-              connectWebSocket();
-            }}
-            className={`px-3 py-1 rounded text-sm ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800 hover:bg-red-200'}`}
-            title={isConnected ? "Conexión WebSocket activa" : "Hacer click para reconectar WebSocket"}
-          >
-            {isConnected ? '🟢 Conectado' : reconnectAttempts.current >= maxReconnectAttempts ? '🔴 Reconectar' : '🟡 Conectando...'}
-          </button>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">
-              {isConnected 
-                ? 'WebSocket Activo' 
-                : reconnectAttempts.current >= maxReconnectAttempts 
-                  ? 'WebSocket Desconectado (Click para reconectar)' 
-                  : 'WebSocket Conectando...'
-              }
-            </span>
-            <div className={`w-3 h-3 rounded-full ${
-              isConnected 
-                ? 'bg-green-500 animate-pulse' 
-                : reconnectAttempts.current >= maxReconnectAttempts 
-                  ? 'bg-red-500' 
-                  : 'bg-yellow-500 animate-pulse'
-            }`}></div>
-          </div>
-        </div>
-        */}
-      </div><div className="bg-white rounded-lg p-6 mb-6 shadow-sm border-l-4 border-purple-500">
-        <h2 className="text-xl font-bold text-purple-800 mb-4">🎥 Control de Cámaras</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">          <div className="col-span-2 md:col-span-1">
-            <label className="block text-sm font-medium text-purple-700 mb-2">Seleccionar Cámara</label>
-            <select value={selectedCamera} onChange={(e) => setSelectedCamera(e.target.value)} className="w-full p-2 border border-purple-300 rounded-md" disabled={isMonitoring || isLoadingData}>
+    <div className="w-full max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-slate-900">📊 Monitor en Tiempo Real</h1>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-bold text-slate-900 mb-4">🎥 Control de Cámaras</h2>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
+          <div className="col-span-2 md:col-span-1">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Cámara</label>
+            <select 
+              value={selectedCamera} 
+              onChange={(e) => setSelectedCamera(e.target.value)} 
+              className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+              disabled={isMonitoring || isLoadingData}
+            >
               <option value="">{isLoadingData ? "Cargando..." : "-- Seleccione --"}</option>
               {availableCameras.map((camera) => (
                 <option key={camera.camera_id} value={camera.camera_id}>{camera.camera_id} ({camera.tunel})</option>
@@ -405,10 +381,9 @@ const RealTimeMonitorNew = () => {
             </div>
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">        <div className="xl:col-span-2 bg-white rounded-lg p-4 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">📹 Visualización de Cámara en Vivo</h3>
+      </div>      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-lg p-4">
+            <h3 className="text-lg font-medium text-slate-800 mb-4">📹 Visualización de Cámara en Vivo</h3>
             <div className="bg-black aspect-video rounded-md flex items-center justify-center text-white relative">
                 {selectedCamera ? (
                     <div className="w-full h-full relative">
@@ -440,13 +415,13 @@ const RealTimeMonitorNew = () => {
                 ) : (
                     <div className="text-center p-8">
                         <div className="text-6xl mb-4">📹</div>
-                        <p className="text-gray-400 mb-2 text-lg">Ninguna cámara seleccionada</p>
-                        <p className="text-gray-500 text-sm">Seleccione una cámara e inicie el monitoreo para ver la transmisión en vivo con detección automática</p>
+                        <p className="text-slate-400 mb-2 text-lg">Ninguna cámara seleccionada</p>
+                        <p className="text-slate-500 text-sm">Seleccione una cámara e inicie el monitoreo para ver la transmisión en vivo con detección automática</p>
                     </div>
                 )}
             </div>
             {monitorError && (
-                <div className="mt-3 p-3 bg-red-100 text-red-700 text-sm rounded-md border border-red-200">
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
                     <strong>⚠️ Problema con la cámara:</strong> {monitorError}
                 </div>
             )}
@@ -456,7 +431,7 @@ const RealTimeMonitorNew = () => {
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h4 className="font-semibold text-blue-800 mb-1">🤖 Detección Automática Activa</h4>
+                            <h4 className="font-medium text-blue-800 mb-1">🤖 Detección Automática Activa</h4>
                             <p className="text-sm text-blue-600">
                                 El sistema está analizando el video en tiempo real para detectar números de vagonetas y modelos de ladrillos.
                                 Las detecciones se guardan automáticamente en el historial.
@@ -468,115 +443,120 @@ const RealTimeMonitorNew = () => {
                     </div>
                 </div>
             )}
-        </div><div className="bg-white rounded-lg p-4 shadow-sm">          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-800 flex items-center">
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-slate-800 flex items-center">
               📋 Detecciones Recientes
-              <span className="ml-2 text-sm font-normal text-gray-500">({recentDetections.length}/15)</span>
+              <span className="ml-2 text-sm font-normal text-slate-500">({recentDetections.length}/15)</span>
             </h3>
             <div className="flex gap-2">
               <button 
                 onClick={loadInitialData}
-                className="text-sm px-3 py-1 bg-cyan-500 text-white rounded hover:bg-cyan-600 transition-all"
+                className="text-sm px-3 py-1 bg-orange-500 text-white font-medium rounded hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
                 title="Recargar detecciones del historial"
               >
                 🔄 Historial
               </button>
               <button 
                 onClick={() => setRecentDetections([])}
-                className="text-sm px-2 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300 transition-all"
+                className="text-sm px-2 py-1 bg-slate-200 text-slate-600 font-medium rounded hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors"
                 title="Limpiar lista de detecciones"
               >
                 🗑️ Limpiar
               </button>
             </div>
-          </div>
-          <div className="space-y-3 h-[600px] overflow-y-auto border border-gray-200 rounded-md p-2">            {recentDetections.length > 0 ? recentDetections.map((det, index) => (
-                <div key={`det-${det.id || det._id || index}-${det.timestamp || Date.now()}-${index}`} className={`p-3 rounded-md border transition-all hover:shadow-md ${
+          </div>          <div className="space-y-3 h-[600px] overflow-y-auto border border-slate-200 rounded-md p-2">
+            {recentDetections.length > 0 ? recentDetections.map((det, index) => (
+                <div key={`det-${det.id || det._id || index}-${det.timestamp || Date.now()}-${index}`} className={`p-3 rounded-md border transition-all hover:shadow-sm ${
                   det.origen_deteccion === 'live_camera' 
                     ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                 }`}>
                   <div className="flex justify-between items-start mb-2">
-                    <div className="font-bold text-gray-900 text-lg">
+                    <div className="font-bold text-slate-900 text-lg">
                       N°: {det.numero_detectado || det.numero || 'N/A'}
                     </div>
                     <div className={`text-xs px-2 py-1 rounded-full font-medium ${
                       det.origen_deteccion === 'live_camera' 
                         ? 'bg-green-200 text-green-800' 
-                        : 'bg-cyan-100 text-cyan-700'
+                        : 'bg-orange-100 text-orange-700'
                     }`}>
                       {det.origen_deteccion === 'live_camera' ? '📹 En vivo' : '📋 Historial'}
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-                    <div className="text-gray-600">
-                      <span className="font-medium text-purple-700">Confianza:</span>
+                    <div className="text-slate-600">
+                      <span className="font-medium text-slate-700">Confianza:</span>
                       <span className="ml-1 font-bold text-green-600">
                         {(det.confianza * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div className="text-gray-600">
-                      <span className="font-medium text-purple-700">Evento:</span>
-                      <span className="ml-1 font-semibold text-blue-600">
+                    <div className="text-slate-600">
+                      <span className="font-medium text-slate-700">Evento:</span>
+                      <span className="ml-1 font-medium text-blue-600">
                         {det.evento || 'N/A'}
                       </span>
                     </div>
                   </div>
                   
                   {det.modelo_ladrillo && (
-                    <div className="text-sm text-orange-700 font-semibold mb-2 bg-orange-50 px-2 py-1 rounded">
+                    <div className="text-sm text-orange-700 font-medium mb-2 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
                       🧱 <span className="font-medium">Modelo:</span> {det.modelo_ladrillo}
                     </div>
                   )}
                   
-                  <div className="text-xs text-gray-500 mb-2 flex items-center">
+                  <div className="text-xs text-slate-500 mb-2 flex items-center">
                     <span className="mr-2">🕒</span>
                     {new Date(det.timestamp).toLocaleString()}
                   </div>
                   
                   {det.imagen_path && (
-                    <div className="mt-2">                      <img 
+                    <div className="mt-2">
+                      <img 
                         src={`${API_BASE_URL}/${det.imagen_path}`}
                         alt={`Detección ${det.id}`}
-                        className="w-full h-20 object-cover rounded border cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-105"
+                        className="w-full h-20 object-cover rounded border border-slate-200 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105"
                         onClick={() => window.open(`${API_BASE_URL}/${det.imagen_path}`, '_blank')}
                         title="Click para ver imagen completa"
                       />
-                      <div className="text-xs text-gray-400 mt-1 text-center">
+                      <div className="text-xs text-slate-400 mt-1 text-center">
                         📸 Click para ampliar
                       </div>
                     </div>
                   )}
-                </div>              )) : (
+                </div>
+              )) : (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">🔍</div>
-                  <p className="text-lg text-gray-500 mb-2">Esperando detecciones...</p>
-                  <p className="text-sm text-gray-400 mb-4">
+                  <p className="text-lg text-slate-500 mb-2">Esperando detecciones...</p>
+                  <p className="text-sm text-slate-400 mb-4">
                     {isMonitoring 
                       ? 'El monitoreo está activo. Las detecciones aparecerán aquí en tiempo real.' 
                       : 'Inicia el monitoreo para ver detecciones en tiempo real.'}
                   </p>
                   {!isMonitoring && (
-                    <div className="text-xs text-gray-400 bg-gray-100 p-2 rounded">
+                    <div className="text-xs text-slate-400 bg-slate-100 p-2 rounded">
                       💡 <strong>Tip:</strong> Selecciona una cámara y presiona "▶️ Iniciar" para comenzar
                     </div>
-                  )}                </div>
+                  )}
+                </div>
               )
             }
           </div>
-          
-          {/* Panel de estadísticas rápidas */}
+            {/* Panel de estadísticas rápidas */}
           {recentDetections.length > 0 && (
-            <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-md">
-              <h4 className="font-semibold text-blue-800 mb-2">📊 Resumen Rápido</h4>
+            <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md">
+              <h4 className="font-medium text-slate-800 mb-2">📊 Resumen Rápido</h4>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-gray-600">Total detecciones:</span>
+                  <span className="text-slate-600">Total detecciones:</span>
                   <span className="ml-1 font-bold text-blue-600">{recentDetections.length}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">En vivo:</span>
+                  <span className="text-slate-600">En vivo:</span>
                   <span className="ml-1 font-bold text-green-600">
                     {recentDetections.filter(d => d.origen_deteccion === 'live_camera').length}
                   </span>
@@ -585,26 +565,26 @@ const RealTimeMonitorNew = () => {
             </div>
           )}
         </div>
-      </div>
-
-      {debugInfo && (
-        <div className="bg-white rounded-lg p-6 mt-6 shadow-sm border-l-4 border-yellow-500">
-          <h2 className="text-xl font-bold text-yellow-800 mb-4">🔍 Info de Debug (Backend)</h2>
-          <div className="bg-yellow-50 p-4 rounded border grid md:grid-cols-2 gap-4">
+      </div>      {debugInfo && (
+        <div className="bg-white border border-slate-200 rounded-lg p-6 mt-6">
+          <h2 className="text-xl font-medium text-slate-800 mb-4">🔍 Info de Debug (Backend)</h2>
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded grid md:grid-cols-2 gap-4">
               <p><strong>Cámara:</strong> {debugInfo.camera_id}</p>
               <p><strong>FPS:</strong> {debugInfo.fps}</p>
               <p><strong>Resolución:</strong> {debugInfo.resolution}</p>
               <p><strong>Última Actualización:</strong> {new Date(debugInfo.timestamp).toLocaleTimeString()}</p>
           </div>
         </div>
-      )}      {showSystemInfo && systemInfo && (
+      )}
+
+      {showSystemInfo && systemInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowSystemInfo(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-gray-800">📊 Información de Cámaras del Sistema</h2>
+              <h2 className="text-2xl font-bold text-slate-800">📊 Información de Cámaras del Sistema</h2>
               <button 
                 onClick={() => setShowSystemInfo(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                className="text-slate-500 hover:text-slate-700 text-2xl font-bold focus:outline-none"
               >
                 ×
               </button>
@@ -618,7 +598,7 @@ const RealTimeMonitorNew = () => {
                     {systemInfo.system_cameras.map((cam, index) => (
                       <div key={index} className="p-3 rounded border bg-blue-50 border-blue-200">
                         <div className="font-medium">Índice: {cam.index} ({cam.status})</div>
-                        <div className="text-sm text-gray-600">Resolución: {cam.width}x{cam.height} @ {cam.fps} FPS</div>
+                        <div className="text-sm text-slate-600">Resolución: {cam.width}x{cam.height} @ {cam.fps} FPS</div>
                       </div>
                     ))}
                   </div>
@@ -627,9 +607,9 @@ const RealTimeMonitorNew = () => {
                   <h4 className="font-bold text-green-700 mb-3">Configuración Actual</h4>
                   <div className="space-y-2">
                     {systemInfo.configured_cameras.map((cam, index) => (
-                      <div key={index} className={`p-3 rounded border ${cam.currently_monitoring ? 'bg-green-100 border-green-300' : 'bg-gray-50'}`}>
+                      <div key={index} className={`p-3 rounded border ${cam.currently_monitoring ? 'bg-green-100 border-green-300' : 'bg-slate-50 border-slate-200'}`}>
                         <div className="font-medium flex items-center">{cam.currently_monitoring ? '🟢' : '⚪'} {cam.camera_id}</div>
-                        <div className="text-sm text-gray-600">Túnel: {cam.tunel} | Usa Índice: {cam.camera_url}</div>
+                        <div className="text-sm text-slate-600">Túnel: {cam.tunel} | Usa Índice: {cam.camera_url}</div>
                       </div>
                     ))}
                   </div>
@@ -638,9 +618,9 @@ const RealTimeMonitorNew = () => {
             ) : (
               <div className="text-center py-8">
                 <div className="text-6xl mb-4">📊</div>
-                <p className="text-lg text-gray-500 mb-2">Información del Sistema</p>
-                <div className="bg-gray-50 p-4 rounded-md text-left">
-                  <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                <p className="text-lg text-slate-500 mb-2">Información del Sistema</p>
+                <div className="bg-slate-50 border border-slate-200 p-4 rounded-md text-left">
+                  <pre className="text-sm text-slate-700 whitespace-pre-wrap">
                     {JSON.stringify(systemInfo, null, 2)}
                   </pre>
                 </div>
@@ -648,7 +628,7 @@ const RealTimeMonitorNew = () => {
             )}
             
             {systemInfo.total_system_cameras !== undefined && (
-              <div className="mt-4 p-3 bg-yellow-50 rounded border border-yellow-300">
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-300 rounded">
                 <p><strong>Resumen:</strong> {systemInfo.total_system_cameras} cámara(s) detectada(s) | {systemInfo.active_monitors || 0} monitor(es) activo(s).</p>
               </div>
             )}
@@ -656,7 +636,7 @@ const RealTimeMonitorNew = () => {
             <div className="mt-6 flex justify-end">
               <button 
                 onClick={() => setShowSystemInfo(false)} 
-                className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                className="px-6 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
               >
                 Cerrar
               </button>

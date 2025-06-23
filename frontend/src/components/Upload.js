@@ -4,20 +4,34 @@ import Spinner from "./Spinner";
 
 const Feedback = ({ status, message, details }) => {
   if (!status) return null;
-  let color = "text-cyan-700";
+  let color = "text-slate-700";
   let icon = "ℹ️";
-  if (status === "success" || status === "ok") { color = "text-green-600"; icon = "✅"; } // Changed to "success" to match new feedback
-  if (status === "error") { color = "text-red-600"; icon = "❌"; }
-  if (status === "warning" || status === "ignored") { color = "text-yellow-600"; icon = "⚠️"; } // Changed to "warning"
+  let bgColor = "bg-slate-50 border-slate-200";
+  
+  if (status === "success" || status === "ok") { 
+    color = "text-green-700"; 
+    icon = "✅"; 
+    bgColor = "bg-green-50 border-green-200";
+  }
+  if (status === "error") { 
+    color = "text-red-700"; 
+    icon = "❌"; 
+    bgColor = "bg-red-50 border-red-200";
+  }
+  if (status === "warning" || status === "ignored") { 
+    color = "text-amber-700"; 
+    icon = "⚠️"; 
+    bgColor = "bg-amber-50 border-amber-200";
+  }
   
   return (
-    <div className={`font-bold text-center mt-4 p-4 rounded-lg ${status === 'success' ? 'bg-green-50' : status === 'error' ? 'bg-red-50' : status === 'warning' ? 'bg-yellow-50' : 'bg-cyan-50'} ${color}`}>
-      <div className="flex items-center justify-center gap-2">
+    <div className={`mt-6 p-4 rounded-lg border ${bgColor} ${color}`}>
+      <div className="flex items-center justify-center gap-2 font-medium">
         <span>{icon}</span>
         <span>{message}</span>
       </div>
       {details && (
-        <pre className="text-sm font-normal mt-2 p-3 bg-gray-100 rounded-lg text-left overflow-x-auto max-h-60">
+        <pre className="text-sm font-mono mt-3 p-3 bg-slate-100 border border-slate-200 rounded-md text-left overflow-x-auto max-h-60 text-slate-800">
           {details}
         </pre>
       )}
@@ -525,31 +539,28 @@ const Upload = () => {
       checkAllFilesProcessed(); // Re-check to update overall status
     }
   };
-
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-lg mt-6 mb-8 border border-cyan-200">
-      <div className="text-center mb-6">
-        <h2 className="text-3xl font-extrabold text-orange-600 mb-2">
-          📤 Procesar Imágenes y Videos de Vagonetas
+    <div className="w-full max-w-4xl mx-auto bg-white rounded-lg border border-slate-200 p-8 mt-6 mb-8">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-slate-900 mb-2">
+          Procesar Imágenes y Videos
         </h2>
-        <p className="text-gray-600">
+        <p className="text-slate-600 text-lg">
           Sube una o múltiples imágenes/videos para detectar automáticamente los números de las vagonetas.
         </p>
         {modelInfo && (
-          <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
-            <div className="text-sm text-purple-700 font-semibold">
-              🧠 Modelo Activo: {modelInfo.model_type} |
-              🎯 {modelInfo.classes_count} clases detectables |
-              📊 Confianza: {modelInfo.confidence_threshold}
+          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="text-sm text-slate-700">
+              🧠 <span className="font-medium">Modelo Activo:</span> {modelInfo.model_type} |
+              🎯 <span className="font-medium">{modelInfo.classes_count} clases detectables</span> |
+              📊 <span className="font-medium">Confianza:</span> {modelInfo.confidence_threshold}
             </div>
           </div>
         )}
-      </div>
-
-      <form onSubmit={handleUpload} className="space-y-6">
-        <div className="border-2 border-dashed border-cyan-300 rounded-xl p-8 text-center bg-cyan-50 hover:bg-cyan-100 transition">
+      </div>      <form onSubmit={handleUpload} className="space-y-6">
+        <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors duration-200">
           <div className="mb-4">
-            <svg className="mx-auto h-12 w-12 text-cyan-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+            <svg className="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
               <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
@@ -563,17 +574,22 @@ const Upload = () => {
             disabled={loading}
           />
           <label htmlFor="file-upload" className={`cursor-pointer ${loading ? 'cursor-not-allowed' : ''}`}>
-            <span className="text-lg font-semibold text-cyan-700">
+            <span className="text-lg font-medium text-slate-700">
               Haz clic para seleccionar archivos
             </span>
-            <p className="text-cyan-600 mt-1">
+            <p className="text-slate-500 mt-1">
               Soporta imágenes (JPG, PNG) y videos (MP4, AVI)
             </p>
           </label>
         </div>        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
           <div>
-            <label htmlFor="evento" className="block text-sm font-medium text-gray-700">Evento</label>
-            <select id="evento" value={evento} onChange={(e) => setEvento(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500">
+            <label htmlFor="evento" className="block text-sm font-medium text-slate-700 mb-2">Evento</label>
+            <select 
+              id="evento" 
+              value={evento} 
+              onChange={(e) => setEvento(e.target.value)} 
+              className="mt-1 block w-full p-3 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+            >
               <option value="ingreso">Ingreso</option>
               <option value="salida">Salida</option>
               <option value="otro">Otro</option>
@@ -590,13 +606,11 @@ const Upload = () => {
             <input type="text" id="merma" value={merma} onChange={(e) => setMerma(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: 10%" />
           </div>
           */}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 pt-4">
+        </div>        <div className="flex flex-col sm:flex-row gap-3 pt-6">
           <button
             type="submit"
             disabled={loading || files.length === 0}
-            className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg shadow-sm text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-150 ease-in-out flex"
+            className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors duration-200 flex"
           >
             {loading ? <><Spinner size={20} /> <span className="ml-2">Procesando...</span></> : "📤 Iniciar Procesamiento"}
           </button>
@@ -604,7 +618,7 @@ const Upload = () => {
             <button
               type="button"
               onClick={handleCancelUpload}
-              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-gray-300 text-base font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 transition-colors duration-150 ease-in-out flex"
+              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-slate-300 text-base font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-200 flex"
             >
               🛑 Cancelar
             </button>
@@ -616,32 +630,26 @@ const Upload = () => {
         <div className="mt-6">
           <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
         </div>
-      )}
-
-      {loading && overallProgress > 0 && (
+      )}      {loading && overallProgress > 0 && (
         <div className="mt-6">
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">Progreso Total de Subida</h3>
-          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-            <div className="bg-cyan-600 h-2.5 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallProgress}%` }}></div>
+          <h3 className="text-lg font-medium text-slate-700 mb-3">Progreso Total de Subida</h3>
+          <div className="w-full bg-slate-200 rounded-full h-2">
+            <div className="bg-orange-500 h-2 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallProgress}%` }}></div>
           </div>
-          <p className="text-sm text-gray-600 text-center mt-1">{overallProgress}%</p>
+          <p className="text-sm text-slate-600 text-center mt-2">{overallProgress}%</p>
         </div>
-      )}
-
-      {Object.keys(fileProgress).length > 0 && (
-        <div className="mt-6 bg-gray-50 rounded-lg p-4 shadow">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">
+      )}      {Object.keys(fileProgress).length > 0 && (
+        <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-6">
+          <h3 className="text-xl font-medium text-slate-800 mb-4 pb-3 border-b border-slate-200">
             Detalle del Procesamiento:
           </h3>
-          <div className="space-y-4">            {Object.entries(fileProgress).map(([fileId, progress]) => {
+          <div className="space-y-4">{Object.entries(fileProgress).map(([fileId, progress]) => {
               // eslint-disable-next-line no-unused-vars
               const originalFile = files.find(f => f.name === progress.name);
               // const isVideo = originalFile?.type.startsWith('video/'); // Not currently used, but kept for potential future use
               const fileSizeMB = progress.total ? (progress.total / (1024 * 1024)).toFixed(2) : 'N/A';
-              const individualProgressPercent = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;
-
-              let statusIcon = '⏳';
-              let statusColor = 'text-gray-600';
+              const individualProgressPercent = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;              let statusIcon = '⏳';
+              let statusColor = 'text-slate-600';
               let statusText = progress.status; // Default to the raw status
 
               if (progress.status === 'completed') {
@@ -654,7 +662,7 @@ const Upload = () => {
                 statusText = 'Error';
               } else if (progress.status === 'ignored') {
                 statusIcon = '⚠️';
-                statusColor = 'text-yellow-600';
+                statusColor = 'text-amber-600';
                 statusText = 'Ignorado';
               } else if (progress.status === 'uploading') {
                 statusIcon = '📤';
@@ -670,53 +678,53 @@ const Upload = () => {
                 statusText = 'Procesando';
               } else if (progress.status === 'pending') {
                 statusIcon = '⏳';
-                statusColor = 'text-gray-500';
+                statusColor = 'text-slate-500';
                 statusText = 'Pendiente';
               }
 
               return (
-                <div key={fileId} className="p-4 bg-white rounded-lg shadow border border-gray-200">
+                <div key={fileId} className="p-4 bg-white rounded-lg border border-slate-200">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-semibold text-gray-700 truncate max-w-[calc(100%-120px)]" title={progress.name}>
+                    <span className="font-medium text-slate-700 truncate max-w-[calc(100%-120px)]" title={progress.name}>
                       {progress.name} ({fileSizeMB} MB)
                     </span>
-                    <span className={`font-bold ${statusColor} flex items-center text-sm whitespace-nowrap`}>
+                    <span className={`font-medium ${statusColor} flex items-center text-sm whitespace-nowrap`}>
                       {statusIcon} <span className="ml-1.5">{statusText}</span>
                     </span>
                   </div>
 
                   {(progress.status === 'uploading' || (progress.status === 'pending' && loading && files.map(f => f.name).includes(progress.name))) && progress.total > 0 && (
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                    <div className="w-full bg-slate-200 rounded-full h-2 mb-1">
                       <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-150"
+                        className="bg-orange-500 h-2 rounded-full transition-all duration-150"
                         style={{ width: `${individualProgressPercent}%` }}
                       ></div>
                     </div>
                   )}
                   {progress.status === 'uploading' && progress.total > 0 && (
-                    <p className="text-xs text-gray-500 text-right">{individualProgressPercent}% subido</p>
+                    <p className="text-xs text-slate-500 text-right">{individualProgressPercent}% subido</p>
                   )}
 
                   {progress.serverMessage && (
-                    <p className="text-xs text-gray-500 mt-1 bg-gray-100 p-2 rounded">
+                    <p className="text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 p-2 rounded">
                       {progress.serverMessage}
                     </p>
                   )}
 
                   {progress.status === 'completed' && progress.result && (
-                    <div className="mt-2 text-xs p-2 bg-green-50 rounded border border-green-200">
+                    <div className="mt-2 text-xs p-2 bg-green-50 border border-green-200 rounded">
                       <p><strong>Número:</strong> {progress.result.numero || progress.result.numero_detectado || 'N/A'}</p>
                       <p><strong>Confianza:</strong> {progress.result.confianza ? (progress.result.confianza * 100).toFixed(1) + '%' : 'N/A'}</p>
                       {progress.result.message && !progress.serverMessage.includes(progress.result.message) && <p><strong>Msg:</strong> {progress.result.message}</p>}
                     </div>
                   )}
                   {progress.status === 'error' && progress.result && progress.result.message && (
-                    <div className="mt-2 text-xs p-2 bg-red-50 rounded border border-red-200 text-red-700">
+                    <div className="mt-2 text-xs p-2 bg-red-50 border border-red-200 rounded text-red-700">
                       <p><strong>Error:</strong> {progress.result.message}</p>
                     </div>
                   )}
                   {progress.status === 'ignored' && progress.result && progress.result.message && (
-                    <div className="mt-2 text-xs p-2 bg-yellow-50 rounded border border-yellow-200 text-yellow-700">
+                    <div className="mt-2 text-xs p-2 bg-amber-50 border border-amber-200 rounded text-amber-700">
                       <p><strong>Info:</strong> {progress.result.message}</p>
                     </div>
                   )}

@@ -65,38 +65,37 @@ const ModelConfig = () => {
     }
     setLoading(false);
   };
-
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl p-8 shadow-lg mt-6 mb-8 border border-cyan-200">      <div className="text-center mb-6">
-        <h2 className="text-3xl font-extrabold text-purple-600 mb-2">
+    <div className="w-full max-w-4xl mx-auto bg-white rounded-lg border border-slate-200 p-8 mt-6 mb-8">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-semibold text-slate-900 mb-2">
           🧠 Configuración del Modelo IA
-        </h2>        <p className="text-gray-600">
+        </h2>
+        <p className="text-slate-600 text-sm">
           Ajusta los parámetros principales del modelo YOLOv8: confianza y agrupación de números/ladrillos
         </p>
-      </div>
-
-      {/* Notificación */}
+      </div>      {/* Notificación */}
       {notification && (
-        <div className={`mb-6 p-4 rounded-lg border-l-4 ${
+        <div className={`mb-6 p-4 rounded-md border ${
           notification.type === 'success' 
-            ? 'bg-green-50 border-green-400 text-green-700' 
-            : 'bg-red-50 border-red-400 text-red-700'
+            ? 'bg-green-50 border-green-200 text-green-800' 
+            : 'bg-red-50 border-red-200 text-red-800'
         }`}>
           <div className="flex items-center">
             <div className="flex-shrink-0">
               {notification.type === 'success' ? (
-                <div className="text-green-500 text-lg">✅</div>
+                <div className="text-green-600 text-sm font-medium">✓</div>
               ) : (
-                <div className="text-red-500 text-lg">❌</div>
+                <div className="text-red-600 text-sm font-medium">✕</div>
               )}
             </div>
             <div className="ml-3">
-              <p className="font-medium">{notification.message}</p>
+              <p className="text-sm font-medium">{notification.message}</p>
             </div>
             <div className="ml-auto pl-3">
               <button
                 onClick={() => setNotification(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <span className="sr-only">Cerrar</span>
                 ✕
@@ -104,38 +103,36 @@ const ModelConfig = () => {
             </div>
           </div>
         </div>
-      )}{/* Información del Modelo */}
+      )}      {/* Información del Modelo */}
       {modelInfo && (
-        <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 mb-6">
-          <h3 className="text-xl font-bold text-purple-700 mb-4">📊 Estado del Modelo</h3>
+        <div className="bg-slate-50 rounded-lg border border-slate-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">📊 Estado del Modelo</h3>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg p-4 shadow-sm model-info-card">
-              <div className="text-2xl font-bold text-green-600">{modelInfo.classes_count}</div>
-              <div className="text-sm text-gray-600">Clases Detectables</div>
+            <div className="bg-white rounded-md border border-slate-200 p-4">
+              <div className="text-2xl font-semibold text-slate-900">{modelInfo.classes_count}</div>
+              <div className="text-sm text-slate-600">Clases Detectables</div>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm model-info-card">
-              <div className="text-2xl font-bold text-blue-600">{modelInfo.confidence_threshold}</div>
-              <div className="text-sm text-gray-600">Umbral Confianza</div>
+            <div className="bg-white rounded-md border border-slate-200 p-4">
+              <div className="text-2xl font-semibold text-orange-600">{modelInfo.confidence_threshold}</div>
+              <div className="text-sm text-slate-600">Umbral Confianza</div>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm model-info-card">
-              <div className="text-2xl font-bold text-purple-600">{modelInfo.model_size}</div>
-              <div className="text-sm text-gray-600">Tamaño Modelo</div>
+            <div className="bg-white rounded-md border border-slate-200 p-4">
+              <div className="text-2xl font-semibold text-slate-900">{modelInfo.model_size}</div>
+              <div className="text-sm text-slate-600">Tamaño Modelo</div>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm model-info-card">
-              <div className="text-2xl font-bold text-orange-600 status-pulse">{modelInfo.training_epochs}</div>
-              <div className="text-sm text-gray-600">Épocas Entrenamiento</div>
+            <div className="bg-white rounded-md border border-slate-200 p-4">
+              <div className="text-2xl font-semibold text-slate-900">{modelInfo.training_epochs}</div>
+              <div className="text-sm text-slate-600">Épocas Entrenamiento</div>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Configuración Avanzada */}
+      )}      {/* Configuración Avanzada */}
       <div className="space-y-6">
         <div className="grid md:grid-cols-2 gap-6">
           {/* Confianza Mínima */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700">
-              🎯 Confianza Mínima: {config.min_confidence}
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-900">
+              🎯 Confianza Mínima: <span className="text-orange-600 font-semibold">{config.min_confidence}</span>
             </label>
             <input
               type="range"
@@ -144,18 +141,21 @@ const ModelConfig = () => {
               step="0.01"
               value={config.min_confidence}
               onChange={(e) => setConfig({...config, min_confidence: parseFloat(e.target.value)})}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+              className="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              style={{
+                background: `linear-gradient(to right, #ea580c 0%, #ea580c ${((config.min_confidence - 0.01) / (0.95 - 0.01)) * 100}%, #e2e8f0 ${((config.min_confidence - 0.01) / (0.95 - 0.01)) * 100}%, #e2e8f0 100%)`
+              }}
             />
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-slate-500">
               <span>Muy Sensible (0.01)</span>
               <span>Muy Estricto (0.95)</span>
             </div>
           </div>
 
           {/* Umbral de Agrupación */}
-          <div className="space-y-2">
-            <label className="block text-sm font-semibold text-gray-700">
-              🔗 Umbral Agrupación: {config.umbral_agrupacion}px
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-900">
+              🔗 Umbral Agrupación: <span className="text-orange-600 font-semibold">{config.umbral_agrupacion}px</span>
             </label>
             <input
               type="range"
@@ -164,14 +164,17 @@ const ModelConfig = () => {
               step="5"
               value={config.umbral_agrupacion}
               onChange={(e) => setConfig({...config, umbral_agrupacion: parseInt(e.target.value)})}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+              className="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              style={{
+                background: `linear-gradient(to right, #ea580c 0%, #ea580c ${((config.umbral_agrupacion - 10) / (200 - 10)) * 100}%, #e2e8f0 ${((config.umbral_agrupacion - 10) / (200 - 10)) * 100}%, #e2e8f0 100%)`
+              }}
             />
-            <div className="flex justify-between text-xs text-gray-500">
+            <div className="flex justify-between text-xs text-slate-500">
               <span>Muy Cercano (10px)</span>
               <span>Muy Lejano (200px)</span>
             </div>
           </div>
-        </div>        {/* Opciones de Modo - OCULTAS POR NO ESTAR IMPLEMENTADAS */}
+        </div>{/* Opciones de Modo - OCULTAS POR NO ESTAR IMPLEMENTADAS */}
         {/* 
         <div className="space-y-4">
           <div className="flex items-center space-x-4">
@@ -200,41 +203,40 @@ const ModelConfig = () => {
             </select>
           </div>
         </div>
-        */}
-
-        {/* Botón de Aplicar */}
-        <div className="text-center pt-4">
+        */}        {/* Botón de Aplicar */}
+        <div className="text-center pt-6">
           <button
             onClick={() => updateConfig(config)}
             disabled={loading}
-            className="px-8 py-3 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg transition disabled:bg-gray-300 disabled:cursor-not-allowed text-lg shadow-lg"
+            className="inline-flex items-center px-6 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           >
             {loading ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+              <>
+                <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
                 Aplicando...
-              </div>
+              </>
             ) : (
-              '💾 Aplicar Configuración'
+              <>
+                💾 Aplicar Configuración
+              </>
             )}
           </button>
         </div>
-      </div>
-
-      {/* Clases Detectables */}
-      {modelInfo?.classes && (          <div className="mt-8 p-6 bg-gray-50 rounded-xl">
-            <h3 className="text-lg font-bold text-gray-700 mb-4">Números y ladrillos detectables</h3>
-            <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-              {modelInfo.classes.map((cls, idx) => (
-                <div key={idx} className="bg-white px-3 py-2 rounded-lg text-center font-mono text-sm border number-badge hover:bg-purple-50 hover:border-purple-300">
-                  {cls}
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 text-sm text-gray-600">
-              💡 Estos son todos los números que el modelo puede detectar automáticamente
-            </div>
+      </div>      {/* Clases Detectables */}
+      {modelInfo?.classes && (
+        <div className="mt-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">🎯 Números y ladrillos detectables</h3>
+          <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+            {modelInfo.classes.map((cls, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 px-3 py-2 rounded-md text-center font-mono text-sm text-slate-700 hover:bg-orange-50 hover:border-orange-200 transition-colors">
+                {cls}
+              </div>
+            ))}
           </div>
+          <div className="mt-4 text-sm text-slate-600">
+            💡 Estos son todos los números que el modelo puede detectar automáticamente
+          </div>
+        </div>
       )}
     </div>
   );
