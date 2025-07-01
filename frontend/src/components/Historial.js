@@ -84,23 +84,30 @@ const Historial = () => {
       console.error(err);
     }
     setLoading(false);
-  }, [fechaInicio, fechaFin, searchTerm, recordsPerPage, agruparPorNumero, maxPorNumero]);  // Incluir dependencias de agrupación
-  
+  }, [fechaInicio, fechaFin, searchTerm, recordsPerPage, agruparPorNumero, maxPorNumero]);
+
+  // Efecto principal: cargar datos iniciales
   useEffect(() => {
     fetchHistorial(1, true);
-  }, [fetchHistorial]); // Incluir fetchHistorial
-
-  // Efecto separado para manejar cambios en filtros y agrupación
-  useEffect(() => {
-    // Solo ejecutar si hay filtros activos para evitar loops
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
-      fetchHistorial(1, true);
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, fechaInicio, fechaFin, agruparPorNumero, maxPorNumero]); // Incluir nuevas dependencias
+  }, []);
+
+  // Efecto unificado para manejar cambios en todos los filtros y agrupación
+  useEffect(() => {
+    // Solo ejecutar si hay datos cargados previamente (evitar carga inicial duplicada)
+    // y si realmente hay cambios en los filtros
+    if (historial.length > 0) {
+      console.log("🔄 Detectado cambio en filtros o agrupación, recargando datos...");
+      
+      const timeoutId = setTimeout(() => {
+        setCurrentPage(1);
+        fetchHistorial(1, true);
+      }, 300); // Debounce para evitar llamadas múltiples
+      
+      return () => clearTimeout(timeoutId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, fechaInicio, fechaFin, agruparPorNumero, maxPorNumero]);
 
   // Simplificar el filtrado ya que ahora se hace en el servidor
   const filteredHistorial = useMemo(() => {
@@ -142,7 +149,7 @@ const Historial = () => {
       fetchHistorial(newPage, true);
     }
   };
-  const clearFilters = () => {
+  const clearFilters = useCallback(async () => {
     console.log("🧹 Limpiando filtros del historial...");
     
     // Resetear todos los filtros
@@ -160,11 +167,9 @@ const Historial = () => {
     
     console.log("✅ Filtros limpiados, recargando datos...");
     
-    // Forzar recarga inmediata de datos sin filtros
-    setTimeout(() => {
-      fetchHistorial(1, true);
-    }, 100);
-  };
+    // Recargar datos directamente para evitar dependencia de useEffect
+    await fetchHistorial(1, true);
+  }, [fetchHistorial]);
   const downloadCSV = () => {
     const headers = ["Numero Detectado", "Evento", "Túnel", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
       item.numero_detectado || 'N/A',
@@ -334,7 +339,8 @@ const Historial = () => {
                 onClick={() => handleSort('numero_detectado')}
               >
                 Numero Detectado {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                 Evento
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
