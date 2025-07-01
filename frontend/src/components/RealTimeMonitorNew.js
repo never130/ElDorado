@@ -206,13 +206,27 @@ const RealTimeMonitorNew = () => {
     };
   }, [loadInitialData, connectWebSocket]); // Removed pingInterval dependency to prevent loop
   const startMonitoring = async () => {
-    if (!selectedCamera) return;
+    if (!selectedCamera) {
+      setMonitorError('Por favor seleccione una cámara antes de iniciar el monitoreo.');
+      return;
+    }
+    
     setMonitorError('');
     setDebugInfo(null);
+    
     try {
+      console.log(`🚀 Iniciando monitoreo para cámara: ${selectedCamera}`);
       const response = await axios.post(`${API_BASE_URL}/monitor/start/${selectedCamera}`);
       setIsMonitoring(true);
       console.log('✅ Monitoreo iniciado exitosamente:', response.data);
+      
+      // Mostrar mensaje de éxito temporal
+      setTimeout(() => {
+        if (response.data.message) {
+          console.log(`📢 ${response.data.message}`);
+        }
+      }, 500);
+      
     } catch (error) {
       if (error.response?.status === 400 && error.response?.data?.detail?.includes('ya está activo')) {
         // Si ya está activo, simplemente actualizar el estado
@@ -220,20 +234,29 @@ const RealTimeMonitorNew = () => {
         setMonitorError('');
         console.log('ℹ️ El monitoreo ya estaba activo');
       } else {
-        const errorMsg = error.response?.data?.detail || 'Error desconocido al iniciar.';
-        setMonitorError(errorMsg);
+        const errorMsg = error.response?.data?.detail || 'Error desconocido al iniciar el monitoreo.';
+        setMonitorError(`❌ Error al iniciar: ${errorMsg}`);
         setIsMonitoring(false);
         console.error('❌ Error al iniciar monitoreo:', errorMsg);
       }
     }
   };
   const stopMonitoring = async () => {
-    if (!selectedCamera) return;
+    if (!selectedCamera) {
+      setMonitorError('No hay cámara seleccionada para detener.');
+      return;
+    }
+    
     try {
+      console.log(`🛑 Deteniendo monitoreo para cámara: ${selectedCamera}`);
       await axios.post(`${API_BASE_URL}/monitor/stop/${selectedCamera}`);
       setIsMonitoring(false);
       setMonitorError('');
       console.log('✅ Monitoreo detenido exitosamente');
+      
+      // Limpiar detecciones en vivo al detener
+      setRecentDetections(prev => prev.filter(det => det.origen_deteccion !== 'live_camera'));
+      
     } catch (error) {
       if (error.response?.status === 404) {
         // Si ya está detenido, simplemente actualizar el estado
@@ -241,8 +264,8 @@ const RealTimeMonitorNew = () => {
         setMonitorError('');
         console.log('ℹ️ El monitoreo ya estaba detenido');
       } else {
-        const errorMsg = error.response?.data?.detail || 'Error desconocido al detener.';
-        setMonitorError(errorMsg);
+        const errorMsg = error.response?.data?.detail || 'Error desconocido al detener el monitoreo.';
+        setMonitorError(`❌ Error al detener: ${errorMsg}`);
         console.error('❌ Error al detener monitoreo:', errorMsg);
       }
     }
@@ -330,8 +353,23 @@ const RealTimeMonitorNew = () => {
               ))}
             </select>
           </div>          <div>
-            <button onClick={isMonitoring ? stopMonitoring : startMonitoring} disabled={!selectedCamera || isLoadingData} className={`w-full px-4 py-2 rounded-md font-medium ${!selectedCamera || isLoadingData ? 'bg-gray-300' : isMonitoring ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}>
-              {isMonitoring ? '⏹️ Detener' : '▶️ Iniciar'}
+            <button 
+              onClick={isMonitoring ? stopMonitoring : startMonitoring} 
+              disabled={!selectedCamera || isLoadingData} 
+              className={`w-full px-4 py-2 rounded-md font-medium transition-all duration-200 transform ${
+                !selectedCamera || isLoadingData 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : isMonitoring 
+                    ? 'bg-red-500 text-white hover:bg-red-600 hover:scale-105 shadow-lg' 
+                    : 'bg-green-500 text-white hover:bg-green-600 hover:scale-105 shadow-lg'
+              } ${isMonitoring ? 'animate-pulse' : ''}`}
+            >
+              {isLoadingData 
+                ? '⏳ Cargando...' 
+                : isMonitoring 
+                  ? '⏹️ Detener' 
+                  : '▶️ Iniciar'
+              }
             </button>
           </div>
           {/* Botones ocultos por petición del usuario */}
@@ -350,10 +388,30 @@ const RealTimeMonitorNew = () => {
           </div>
           */}
           <div className="text-center">
-            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${isMonitoring ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
-              <div className={`w-2 h-2 rounded-full mr-2 ${isMonitoring ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm transition-all duration-200 ${
+              isMonitoring 
+                ? 'bg-green-100 text-green-800 border border-green-300' 
+                : 'bg-gray-100 text-gray-500 border border-gray-300'
+            }`}>
+              <div className={`w-2 h-2 rounded-full mr-2 ${
+                isMonitoring 
+                  ? 'bg-green-500 animate-pulse' 
+                  : 'bg-gray-400'
+              }`}></div>
               {isMonitoring ? 'Monitoreando' : 'Detenido'}
             </div>
+            {isConnected && (
+              <div className="text-xs text-green-600 mt-1 flex items-center justify-center">
+                <div className="w-1 h-1 bg-green-500 rounded-full mr-1 animate-pulse"></div>
+                WebSocket conectado
+              </div>
+            )}
+            {!isConnected && (
+              <div className="text-xs text-red-600 mt-1 flex items-center justify-center">
+                <div className="w-1 h-1 bg-red-500 rounded-full mr-1"></div>
+                WebSocket desconectado
+              </div>
+            )}
           </div>
           <div className="text-center">
             <div className="text-sm text-gray-600">
@@ -466,6 +524,19 @@ const RealTimeMonitorNew = () => {
               >
                 🗑️ Limpiar
               </button>
+              {!isConnected && (
+                <button 
+                  onClick={() => {
+                    console.log('🔄 Reconectando WebSocket manualmente...');
+                    reconnectAttempts.current = 0;
+                    connectWebSocket();
+                  }}
+                  className="text-sm px-2 py-1 bg-blue-500 text-white font-medium rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  title="Reconectar WebSocket"
+                >
+                  🔌 Reconectar
+                </button>
+              )}
             </div>
           </div>          <div className="space-y-3 h-[600px] overflow-y-auto border border-slate-200 rounded-md p-2">
             {recentDetections.length > 0 ? recentDetections.map((det, index) => (

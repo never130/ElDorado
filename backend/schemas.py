@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 class VagonetaBase(BaseModel):
     """Modelo base para registros de vagonetas"""
-    numero: Optional[str] = Field(None, description="Número identificador de la vagoneta")
+    numero: Optional[str] = Field(None, description="Número identificador de la vagoneta", alias="numero_detectado")
     confianza: Optional[float] = Field(None, description="Confianza de la detección de la placa", ge=0.0, le=1.0)
     imagen_path: str = Field(..., description="Ruta de la imagen almacenada")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Fecha y hora del evento")
@@ -15,6 +15,10 @@ class VagonetaBase(BaseModel):
     estado: str = Field(default="activo", description="Estado del registro: activo, anulado, etc")
     origen_deteccion: Optional[str] = Field(None, description="Origen de la detección: video_processing, camera_capture, manual")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Metadatos adicionales (temperatura, humedad, etc)")
+    
+    class Config:
+        populate_by_name = True  # Permite usar tanto 'numero' como 'numero_detectado'
+        from_attributes = True
 
 class VagonetaCreate(VagonetaBase):
     # Se hereda todo de VagonetaBase

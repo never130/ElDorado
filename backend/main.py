@@ -858,8 +858,8 @@ async def get_historial_registros(
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,
-    agrupar_por_numero: Optional[bool] = Query(False, description="Si es True, muestra solo 1-2 registros por número con mayor confianza"),
-    max_por_numero: Optional[int] = Query(2, description="Máximo de registros a mostrar por número cuando agrupar_por_numero=True"),
+    agrupar_por_numero: Optional[bool] = Query(True, description="Si es True, muestra solo 1-2 registros por número con mayor confianza (por defecto True)"),
+    max_por_numero: Optional[int] = Query(1, description="Máximo de registros a mostrar por número cuando agrupar_por_numero=True (por defecto 1)"),
     db = Depends(get_database)
 ):
     if fecha_fin and fecha_fin.hour == 0 and fecha_fin.minute == 0 and fecha_fin.second == 0:
