@@ -336,7 +336,7 @@ class SmartCameraCapture:
                 metadata={"camera_id": self.camera_id}
             )
             
-            record_id = create_vagoneta_record(vagoneta_data_create) # This is a sync function
+            record_id = await create_vagoneta_record(vagoneta_data_create) # Changed to async call
 
             print(f"✅ Vagoneta {detection['numero_detectado']} guardada automáticamente ({self.evento}), ID: {record_id}")
 

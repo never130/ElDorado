@@ -200,7 +200,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
         } else if (data.type === 'progress') {
           serverMessage = `${data.message} (${data.current_frame}/${data.total_frames})`;
           // Agregar información de progreso para mostrar barra visual
-          if (data.current_frame && data.total_frames) {
+          if (data.current_frame !== undefined && data.total_frames && data.total_frames > 0) {
             currentProgressState.frameProgress = {
               current: data.current_frame,
               total: data.total_frames,
@@ -471,7 +471,8 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
                 ...prev[fileId], 
                 status: 'server_processing', 
                 serverMessage: 'Video en cola para procesamiento...',
-                processingId: resultData.processing_id // Guardar el processing_id
+                processingId: resultData.processing_id, // Guardar el processing_id
+                frameProgress: { current: 0, total: 1, percentage: 0 } // Inicializar progreso en 0%
               } 
             }));
             // Iniciar EventSource para este video

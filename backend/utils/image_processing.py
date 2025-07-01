@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 from typing import Optional, Dict, Any # Add this line
 from .ocr import extract_number_from_image # <--- Añadir esta línea
-from .number_grouping import detectar_numero_compuesto_desde_resultados, analizar_calidad_deteccion # Importar nueva funcionalidad
+from .number_grouping import detectar_numero_compuesto_desde_resultados, detectar_todos_los_numeros_desde_resultados, analizar_calidad_deteccion # Importar nueva funcionalidad
 
 _PLACEHOLDER_CROPPED_IMAGE = np.zeros((1, 1, 3), dtype=np.uint8)
 
@@ -170,6 +170,111 @@ class ImageProcessor:
         self.last_detection = final_result # Update last detection
         return final_result
 
+    def detect_all_objects_in_frame(self, image: np.ndarray, umbral_agrupacion: int = 50) -> Dict[str, Any]:
+        """
+        Función unificada que detecta TODOS los números en un frame, no solo el mejor.
+        Detecta: múltiples números de vagoneta (agrupando dígitos), y tipos de ladrillo.
+        
+        Returns:
+            Dict con formato: {
+                "numeros_detectados": {"23": [{"confianza": 0.89, "modelo_ladrillo": "CH18L", ...}], "62": [...]},
+                "otros_objetos": {"ladrillos": [...], "vagonetas": [...]}
+            }
+        """
+        if image is None or image.size == 0:
+            print("❌ Error: Imagen de entrada es None o está vacía en detect_all_objects_in_frame.")
+            return {"numeros_detectados": {}, "otros_objetos": {}}
+
+        # 1. Ejecutar el modelo UNA SOLA VEZ
+        processed_image = self.preprocess_image(image)
+        results = self.model(processed_image, conf=self.min_confidence, imgsz=640)
+
+        if not results or not results[0].boxes:
+            return {"numeros_detectados": {}, "otros_objetos": {}}
+        
+        results_obj = results[0] # Main result object
+
+        # 2. Detectar TODOS los números usando la nueva función
+        todos_los_numeros = detectar_todos_los_numeros_desde_resultados(
+            results, 
+            image.copy(), 
+            umbral_agrupacion
+        )
+
+        # 3. Extraer detecciones de ladrillo y vagoneta del MISMO resultado
+        ladrillos_detectados = []
+        vagonetas_detectadas = []
+
+        # Clases de tipos de ladrillos conocidas (clases 100-105 del modelo)
+        brick_class_ids = {100, 101, 102, 103, 104, 105}  # CH08L, CH12L, CH18L, Losa, Semilosa, Termico
+
+        for box in results_obj.boxes:
+            confidence = float(box.conf[0])
+            class_id = int(box.cls[0])
+            class_name = results_obj.names[class_id]
+            bbox = box.xyxy[0].cpu().numpy()
+
+            # Verificar si es un tipo de ladrillo (clases 100-105)
+            if class_id in brick_class_ids:
+                ladrillos_detectados.append({
+                    'tipo': class_name,
+                    'confianza': confidence,
+                    'bbox': bbox
+                })
+
+            # Buscar vagoneta (si existe esta clase en el modelo)
+            if class_name == 'vagoneta':
+                vagonetas_detectadas.append({
+                    'confianza': confidence,
+                    'bbox': bbox
+                })
+
+        # 4. Asociar ladrillos con números detectados (buscar el ladrillo más cercano a cada número)
+        numeros_con_contexto = {}
+        for numero, detecciones_numero in todos_los_numeros.items():
+            numeros_con_contexto[numero] = []
+            
+            for deteccion in detecciones_numero:
+                # Buscar el ladrillo más cercano a este número específico
+                ladrillo_mas_cercano = None
+                distancia_minima = float('inf')
+                
+                bbox_numero = deteccion['bbox']
+                centro_numero = ((bbox_numero[0] + bbox_numero[2]) / 2, (bbox_numero[1] + bbox_numero[3]) / 2)
+                
+                for ladrillo in ladrillos_detectados:
+                    bbox_ladrillo = ladrillo['bbox']
+                    centro_ladrillo = ((bbox_ladrillo[0] + bbox_ladrillo[2]) / 2, (bbox_ladrillo[1] + bbox_ladrillo[3]) / 2)
+                    
+                    # Calcular distancia euclidiana
+                    distancia = ((centro_numero[0] - centro_ladrillo[0])**2 + (centro_numero[1] - centro_ladrillo[1])**2)**0.5
+                    
+                    if distancia < distancia_minima:
+                        distancia_minima = distancia
+                        ladrillo_mas_cercano = ladrillo
+                
+                # Crear detección completa con contexto
+                deteccion_completa = {
+                    'confianza': deteccion['confianza'],
+                    'bbox': deteccion['bbox'],
+                    'modelo_ladrillo': ladrillo_mas_cercano['tipo'] if ladrillo_mas_cercano else None,
+                    'confianza_ladrillo': ladrillo_mas_cercano['confianza'] if ladrillo_mas_cercano else None,
+                    'detecciones_individuales': deteccion['detecciones_individuales']
+                }
+                
+                numeros_con_contexto[numero].append(deteccion_completa)
+
+        resultado_final = {
+            "numeros_detectados": numeros_con_contexto,
+            "otros_objetos": {
+                "ladrillos": ladrillos_detectados,
+                "vagonetas": vagonetas_detectadas
+            }
+        }
+        
+        print(f"🔍 DEBUG - detect_all_objects_in_frame: {len(numeros_con_contexto)} números únicos detectados")
+        return resultado_final
+
     def get_last_detection(self) -> Optional[Dict[str, Any]]:
         """Retorna la última detección exitosa"""
         return self.last_detection
@@ -214,3 +319,23 @@ def run_detection_on_frame(frame: np.ndarray) -> Dict[str, Any]:
     # Usar el umbral_agrupacion configurado o valor por defecto
     umbral_agrupacion = getattr(processor, 'umbral_agrupacion', 50)
     return processor.detect_objects_unified(frame, umbral_agrupacion)
+
+def run_detection_on_frame_all_numbers(frame: np.ndarray) -> Dict[str, Any]:
+    """
+    Función principal para ejecutar la detección de TODOS los números en un frame (np.ndarray).
+    Esta función devuelve todos los números detectados, no solo el mejor.
+
+    Args:
+        frame (np.ndarray): El frame de video a procesar.
+
+    Returns:
+        Dict[str, Any]: Un diccionario con TODOS los números detectados.
+        Formato: {"numeros_detectados": {"23": [...], "62": [...]}, "otros_objetos": {...}}
+    """
+    if frame is None or frame.size == 0:
+        print("Error: El frame de entrada está vacío o es None.")
+        return {"numeros_detectados": {}, "otros_objetos": {}}
+    
+    # Usar el umbral_agrupacion configurado o valor por defecto
+    umbral_agrupacion = getattr(processor, 'umbral_agrupacion', 50)
+    return processor.detect_all_objects_in_frame(frame, umbral_agrupacion)
