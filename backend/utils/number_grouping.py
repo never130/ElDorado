@@ -6,6 +6,8 @@ def detectar_numero_compuesto_desde_resultados(resultados_yolo, frame=None, umbr
     """
     Agrupa números individuales detectados por YOLO en números compuestos.
     Adaptado del código de Colab para tu sistema existente.
+    NOTA: Esta función devuelve solo el MEJOR número detectado (compatibilidad hacia atrás).
+    Para obtener TODOS los números, usar detectar_todos_los_numeros_desde_resultados().
     
     Args:
         resultados_yolo: Resultados de YOLO v8
@@ -270,3 +272,135 @@ def analizar_calidad_deteccion(info_deteccion: Dict) -> Dict:
             "area_bbox": area
         }
     }
+
+def detectar_todos_los_numeros_desde_resultados(resultados_yolo, frame=None, umbral_agrupacion=50, min_confidence_filter=0.20):
+    """
+    Detecta TODOS los números válidos en un frame, no solo el mejor.
+    Esta es la función que se debe usar para capturar múltiples números por frame.
+    
+    Args:
+        resultados_yolo: Resultados de YOLO v8
+        frame: Frame de imagen opcional para dibujar detecciones
+        umbral_agrupacion: Distancia máxima entre números para agruparlos
+        min_confidence_filter: Confianza mínima para considerar una detección
+    
+    Returns:
+        Dict[str, List[Dict]]: Diccionario con todos los números detectados
+        Formato: {"23": [{"confianza": 0.89, "bbox": (x1,y1,x2,y2), ...}], "62": [...], ...}
+    """
+    detecciones_actuales = []
+    
+    # Procesar resultados de YOLO
+    if resultados_yolo and len(resultados_yolo) > 0 and resultados_yolo[0].boxes is not None:
+        for box, cls, conf in zip(resultados_yolo[0].boxes.xyxy, resultados_yolo[0].boxes.cls, resultados_yolo[0].boxes.conf):
+            confidence = float(conf)
+            class_id = int(cls)
+            
+            # FILTRAR SOLO CLASES NUMÉRICAS (0-99) para detección de números
+            if not (0 <= class_id <= 99):
+                continue  # Saltar clases de ladrillos (100-105)
+                
+            # Filtrar detecciones con confianza muy baja
+            if confidence < min_confidence_filter:
+                continue
+                
+            x1, y1, x2, y2 = map(int, box)
+            detecciones_actuales.append({
+                'bbox': (x1, y1, x2, y2),
+                'class': class_id,
+                'confidence': confidence,
+                'x_center': (x1 + x2) // 2,
+                'y_center': (y1 + y2) // 2
+            })
+
+    if not detecciones_actuales:
+        print("🔍 DEBUG - No se encontraron detecciones válidas para múltiples números")
+        return {}
+
+    print(f"🔍 DEBUG - {len(detecciones_actuales)} detecciones después del filtrado para múltiples números")
+
+    # Ordenar de izquierda a derecha para composición correcta
+    detecciones_actuales.sort(key=lambda x: x['x_center'])
+
+    # Agrupar números cercanos
+    grupos = []
+    if detecciones_actuales:
+        grupo_actual = [detecciones_actuales[0]]
+        
+        for i in range(1, len(detecciones_actuales)):
+            # Distancia entre el borde derecho del anterior y el izquierdo del actual
+            distancia = detecciones_actuales[i]['bbox'][0] - detecciones_actuales[i - 1]['bbox'][2]
+            
+            # También verificar distancia vertical para evitar agrupar números de diferentes líneas
+            distancia_vertical = abs(detecciones_actuales[i]['y_center'] - detecciones_actuales[i - 1]['y_center'])
+            
+            if distancia < umbral_agrupacion and distancia_vertical < 30:  # 30 píxeles de tolerancia vertical
+                grupo_actual.append(detecciones_actuales[i])
+            else:
+                grupos.append(grupo_actual)
+                grupo_actual = [detecciones_actuales[i]]
+        grupos.append(grupo_actual)
+
+    if not grupos:
+        return {}
+
+    # CAMBIO PRINCIPAL: Procesar TODOS los grupos, no solo el mejor
+    todos_los_numeros = {}
+    
+    for grupo in grupos:
+        # Verificar que el grupo tenga sentido
+        confianza_promedio = sum(d['confidence'] for d in grupo) / len(grupo)
+        
+        # Aplicar un filtro mínimo de confianza para evitar falsos positivos
+        if confianza_promedio < min_confidence_filter:
+            continue
+            
+        # FORMAR NÚMERO COMPUESTO para este grupo
+        if len(grupo) > 1:
+            # Ordenar el grupo por posición x (izquierda a derecha)
+            grupo_ordenado = sorted(grupo, key=lambda x: x['x_center'])
+            # Concatenar los números mapeados
+            numeros_individuales = [mapear_clases_a_numeros(det['class']) for det in grupo_ordenado]
+            numero_compuesto = ''.join(numeros_individuales)
+            # Usar la confianza promedio del grupo
+            confianza_final = confianza_promedio
+        else:
+            # Para números de un solo dígito, usar la detección directamente
+            deteccion = grupo[0]
+            numero_compuesto = mapear_clases_a_numeros(deteccion['class'])
+            confianza_final = deteccion['confidence']
+        
+        # Calcular bbox que engloba todo el grupo
+        x1_min = min(d['bbox'][0] for d in grupo)
+        y1_min = min(d['bbox'][1] for d in grupo)
+        x2_max = max(d['bbox'][2] for d in grupo)
+        y2_max = max(d['bbox'][3] for d in grupo)
+        bbox_completo = (x1_min, y1_min, x2_max, y2_max)
+        
+        # Crear info para este número
+        info_deteccion = {
+            'numero': numero_compuesto,
+            'confianza': confianza_final,
+            'bbox': bbox_completo,
+            'detecciones_individuales': len(grupo),
+            'frame': None  # Se rellenará desde el contexto del caller
+        }
+        
+        # Agregar a la lista de números detectados
+        if numero_compuesto not in todos_los_numeros:
+            todos_los_numeros[numero_compuesto] = []
+        
+        todos_los_numeros[numero_compuesto].append(info_deteccion)
+        
+        print(f"🔍 DEBUG - Número detectado: {numero_compuesto}, Confianza: {confianza_final:.3f}, Dígitos: {len(grupo)}")
+        
+        # Dibujar en el frame si se proporciona
+        if frame is not None:
+            cv2.rectangle(frame, (x1_min, y1_min), (x2_max, y2_max), (0, 255, 0), 2)
+            cv2.putText(frame, numero_compuesto, (x1_min, y1_min - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(frame, f"{confianza_final:.2f}", (x1_min, y2_max + 20), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+
+    print(f"🔍 DEBUG - Total de números únicos detectados: {len(todos_los_numeros)}")
+    return todos_los_numeros

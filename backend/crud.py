@@ -3,17 +3,17 @@ from schemas import VagonetaCreate
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Tuple
 from bson import ObjectId
-from pymongo.database import Database
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
-# Funciones CRUD optimizadas
+# Funciones CRUD asíncronas optimizadas
 
-def create_vagoneta_record(data: VagonetaCreate) -> str:
-    db = get_database()
+async def create_vagoneta_record(data: VagonetaCreate) -> str:
+    db = await get_database()
     doc = data.dict()
-    result = db.vagonetas.insert_one(doc)  # MODIFIED: Removed await
+    result = await db.vagonetas.insert_one(doc)
     return str(result.inserted_id)
 
-def get_vagonetas_historial(
+async def get_vagonetas_historial(
     skip: int = 0, 
     limit: int = 50, 
     numero: Optional[str] = None,
@@ -24,7 +24,7 @@ def get_vagonetas_historial(
     merma_min: Optional[float] = None,
     merma_max: Optional[float] = None
 ) -> List[Dict[str, Any]]:
-    db = get_database()
+    db = await get_database()
     query = {"estado": "activo"}
     if numero:
         query["numero"] = numero
@@ -45,10 +45,10 @@ def get_vagonetas_historial(
         if merma_max is not None:
             query["merma"]["$lte"] = merma_max
     cursor = db.vagonetas.find(query).sort("timestamp", -1).skip(skip).limit(limit)
-    return list(cursor)
+    return await cursor.to_list(length=limit)
 
-def get_vagonetas_historial_with_filters(
-    db: Database, # Type hint for clarity
+async def get_vagonetas_historial_with_filters(
+    db, # AsyncIOMotorDatabase - Type hint for clarity
     skip: int = 0, 
     limit: int = 100,
     sort_by: Optional[str] = "timestamp",
@@ -77,22 +77,23 @@ def get_vagonetas_historial_with_filters(
         query["timestamp"] = {"$lte": fecha_fin}
 
     # Get total count before pagination
-    total_registros = db.vagonetas.count_documents(query)
+    total_registros = await db.vagonetas.count_documents(query)
 
     # Get paginated and sorted results
     cursor = db.vagonetas.find(query).sort(sort_by, sort_order).skip(skip).limit(limit)
     
-    # This part must be synchronous as per pymongo documentation
-    registros = [doc for doc in cursor]
+    # Convert cursor to list asynchronously
+    registros = await cursor.to_list(length=limit)
     
     return registros, total_registros
 
-def get_trayectoria_completa(numero: str) -> List[Dict[str, Any]]:
-    db = get_database()
-    return list(db.vagonetas.find({"numero": numero, "estado": "activo"}).sort("timestamp", 1))
+async def get_trayectoria_completa(numero: str) -> List[Dict[str, Any]]:
+    db = await get_database()
+    cursor = db.vagonetas.find({"numero": numero, "estado": "activo"}).sort("timestamp", 1)
+    return await cursor.to_list(length=None)
 
-def get_estadisticas_vagoneta(numero: str) -> Dict[str, Any]:
-    db = get_database()
+async def get_estadisticas_vagoneta(numero: str) -> Dict[str, Any]:
+    db = await get_database()
     pipeline = [
         {"$match": {"numero": numero, "estado": "activo"}},
         {"$group": {
@@ -105,25 +106,26 @@ def get_estadisticas_vagoneta(numero: str) -> Dict[str, Any]:
             "modelos": {"$addToSet": "$modelo_ladrillo"}
         }}
     ]
-    result = db.vagonetas.aggregate(pipeline).to_list(1)
+    result = await db.vagonetas.aggregate(pipeline).to_list(length=1)
     return result[0] if result else None
 
-def anular_registro(id: str) -> bool:
-    db = get_database()
-    result = db.vagonetas.update_one(
-        {"_id": ObjectId(id)},        {"$set": {
+async def anular_registro(id: str) -> bool:
+    db = await get_database()
+    result = await db.vagonetas.update_one(
+        {"_id": ObjectId(id)},
+        {"$set": {
             "estado": "anulado",
             "anulado_en": datetime.now(timezone.utc)
         }}
     )
     return result.modified_count > 0
 
-def buscar_vagonetas(
+async def buscar_vagonetas(
     texto: str,
     skip: int = 0,
     limit: int = 20
 ) -> List[Dict[str, Any]]:
-    db = get_database()
+    db = await get_database()
     cursor = db.vagonetas.find(
         {"$text": {"$search": texto}, "estado": "activo"},
         {"score": {"$meta": "textScore"}}
@@ -132,28 +134,28 @@ def buscar_vagonetas(
     .skip(skip) \
     .limit(limit)
     
-    return [doc for doc in cursor] # Cambiado a comprensión síncrona
+    return await cursor.to_list(length=limit)
 
-def actualizar_registro(
+async def actualizar_registro(
     id: str,
     data: Dict[str, Any]
 ) -> bool:
-    db = get_database()
+    db = await get_database()
     no_update = ["_id", "timestamp", "imagen_path"]
     update_data = {k:v for k,v in data.items() if k not in no_update}
     
-    result = db.vagonetas.update_one(
+    result = await db.vagonetas.update_one(
         {"_id": ObjectId(id)},
         {"$set": update_data}
     )
     return result.modified_count > 0
 
-def get_vagonetas_historial_count(
+async def get_vagonetas_historial_count(
     filtro: Optional[str] = None,
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None
 ) -> int:
-    db = get_database()  # Get database synchronously like other functions
+    db = await get_database()
     query: Dict[str, Any] = {"estado": "activo"}  # Match the query used in get_vagonetas_historial
     
     if filtro:
@@ -171,5 +173,5 @@ def get_vagonetas_historial_count(
     elif fecha_fin:
         query["timestamp"] = {"$lte": fecha_fin}
 
-    count = db.vagonetas.count_documents(query)  # Synchronous call
+    count = await db.vagonetas.count_documents(query)
     return count

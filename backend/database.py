@@ -1,4 +1,5 @@
-from pymongo import MongoClient, IndexModel, ASCENDING, DESCENDING
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import IndexModel, ASCENDING, DESCENDING
 from pymongo.errors import ConnectionFailure, OperationFailure
 import os
 from typing import Optional
@@ -16,23 +17,23 @@ MONGO_PASS = os.getenv("MONGO_PASS") # Puede ser None
 DB_NAME = os.getenv("MONGO_DB_NAME", "el_dorado") # Actualizado al nombre de tu BD
 MONGO_AUTH_DB = os.getenv("MONGO_AUTH_DB", "admin") # Base de datos para autenticación
 
-# Cliente de MongoDB
-client: Optional[MongoClient] = None
+# Cliente de MongoDB asíncrono
+client = None
 db = None
 
-def connect_to_mongo():
-    """Establece la conexión con MongoDB"""
+async def connect_to_mongo():
+    """Establece la conexión con MongoDB de forma asíncrona"""
     global client, db
     if client is None:
         try:
             # Prioridad: usar cadena de conexión si está disponible (Atlas)
             if MONGO_CONNECTION_STRING:
                 # Conectar usando cadena de conexión (MongoDB Atlas)
-                client = MongoClient(MONGO_CONNECTION_STRING)
+                client = AsyncIOMotorClient(MONGO_CONNECTION_STRING)
                 print(f"✅ Conectando a MongoDB Atlas usando cadena de conexión")
             elif MONGO_USER and MONGO_PASS:
                 # Conectar con autenticación (MongoDB local)
-                client = MongoClient(
+                client = AsyncIOMotorClient(
                     host=MONGO_HOST,
                     port=MONGO_PORT,
                     username=MONGO_USER,
@@ -44,19 +45,18 @@ def connect_to_mongo():
             else:
                 # Conectar sin autenticación (para desarrollo local sin credenciales)
                 mongo_uri_local = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
-                client = MongoClient(mongo_uri_local)
+                client = AsyncIOMotorClient(mongo_uri_local)
                 print(f"✅ Conectando a MongoDB local en {MONGO_HOST}:{MONGO_PORT} sin autenticación a la BD '{DB_NAME}'")
             
             # Probar la conexión
-            client.admin.command('ping')
+            await client.admin.command('ping')
             db = client[DB_NAME]
             
             # Crear índices básicos si no existen
-            # Primero, verifica si la colección 'vagonetas' existe, si no, no intentes crear índices aún.
-            # Los índices se crearán cuando se inserte el primer dato si la colección no existe.
-            # O puedes crear la colección explícitamente si es necesario antes de crear índices.
-            if 'vagonetas' in db.list_collection_names():
-                existing_indexes = [index['name'] for index in db.vagonetas.list_indexes()]
+            # Motor/AsyncIOMotorClient maneja las colecciones de forma asíncrona
+            collection_names = await db.list_collection_names()
+            if 'vagonetas' in collection_names:
+                existing_indexes = [index['name'] for index in await db.vagonetas.list_indexes().to_list(length=None)]
                 indexes_to_create = [
                     IndexModel([("numero", ASCENDING)], name="numero_asc_idx"),
                     IndexModel([("timestamp", DESCENDING)], name="timestamp_desc_idx"),
@@ -67,7 +67,7 @@ def connect_to_mongo():
                 for index_model in indexes_to_create:
                     # Nombres de índice deben ser únicos
                     if index_model.document['name'] not in existing_indexes:
-                        db.vagonetas.create_indexes([index_model])
+                        await db.vagonetas.create_indexes([index_model])
                         new_indexes_added = True
                 
                 if new_indexes_added:
@@ -107,16 +107,16 @@ def close_mongo_connection():
         db = None
         print("🔌 Conexión a MongoDB cerrada.")
 
-def get_database():
+async def get_database():
     """Obtiene la base de datos, estableciendo la conexión si es necesario"""
     global db
     if db is None or client is None: # Si el cliente es None, la conexión falló o se cerró
-        connect_to_mongo()
+        await connect_to_mongo()
     return db
 
-def get_vagonetas_collection():
+async def get_vagonetas_collection():
     """Obtiene la colección de vagonetas"""
-    database = get_database()
+    database = await get_database()
     # Asegurarse de que la base de datos no sea None después de intentar conectar
     if database is None:
         raise Exception("No se pudo obtener la instancia de la base de datos. La conexión pudo haber fallado.")

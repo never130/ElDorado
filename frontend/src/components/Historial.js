@@ -22,7 +22,7 @@ const Historial = () => {
   const [fechaFin, setFechaFin] = useState('');
   
   // Nuevo estado para agrupación
-  const [agruparPorNumero, setAgruparPorNumero] = useState(true); // Por defecto agrupado
+  const [agruparPorNumero, setAgruparPorNumero] = useState(false); // Por defecto SIN agrupar para mostrar todos los registros
   const [maxPorNumero, setMaxPorNumero] = useState(2);
 
   // Helper function para determinar el túnel
