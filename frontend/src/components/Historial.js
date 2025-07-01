@@ -143,20 +143,36 @@ const Historial = () => {
     }
   };
   const clearFilters = () => {
+    console.log("🧹 Limpiando filtros del historial...");
+    
+    // Resetear todos los filtros
     setSearchTerm('');
     setFechaInicio('');
     setFechaFin('');
     setCurrentPage(1);
-    // Mantener agrupación por defecto
+    
+    // Mantener agrupación por defecto para mostrar vista optimizada
     setAgruparPorNumero(true);
-    setMaxPorNumero(1); // Corregido: era 2, debería ser 1 por defecto
+    setMaxPorNumero(1);
+    
+    // Limpiar cualquier error previo
+    setError('');
+    
+    console.log("✅ Filtros limpiados, recargando datos...");
+    
+    // Forzar recarga inmediata de datos sin filtros
+    setTimeout(() => {
+      fetchHistorial(1, true);
+    }, 100);
   };
   const downloadCSV = () => {
     const headers = ["Numero Detectado", "Evento", "Túnel", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
       item.numero_detectado || 'N/A',
       item.evento,
       getTunel(item),
-      item.modelo_ladrillo || 'N/A',
+      (item.modelo_ladrillo && item.modelo_ladrillo !== 'None' && item.modelo_ladrillo !== 'null') 
+        ? item.modelo_ladrillo 
+        : 'Sin clasificar',
       item.confianza ? (item.confianza * 100).toFixed(1) : 
       item.confianza_numero ? (item.confianza_numero * 100).toFixed(1) : 
       item.confidence ? (item.confidence * 100).toFixed(1) : 'N/A',
@@ -368,7 +384,15 @@ const Historial = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                  {item.modelo_ladrillo || 'N/A'}
+                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                    item.modelo_ladrillo && item.modelo_ladrillo !== 'None' && item.modelo_ladrillo !== 'null'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {item.modelo_ladrillo && item.modelo_ladrillo !== 'None' && item.modelo_ladrillo !== 'null' 
+                      ? item.modelo_ladrillo 
+                      : 'Sin clasificar'}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
                   {item.confianza ? `${(item.confianza * 100).toFixed(1)}%` : 
