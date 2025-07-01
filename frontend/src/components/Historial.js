@@ -22,8 +22,8 @@ const Historial = () => {
   const [fechaFin, setFechaFin] = useState('');
   
   // Nuevo estado para agrupación
-  const [agruparPorNumero, setAgruparPorNumero] = useState(false); // Por defecto SIN agrupar para mostrar todos los registros
-  const [maxPorNumero, setMaxPorNumero] = useState(2);
+  const [agruparPorNumero, setAgruparPorNumero] = useState(true); // Por defecto CON agrupación para evitar duplicados
+  const [maxPorNumero, setMaxPorNumero] = useState(1); // Solo mostrar el mejor por número por defecto
 
   // Helper function para determinar el túnel
   const getTunel = (item) => {
@@ -271,8 +271,8 @@ const Historial = () => {
         )}
           <div className="text-xs text-slate-500">
           {agruparPorNumero 
-            ? `📊 Mostrando máximo ${maxPorNumero} registro(s) por número (los de mayor confianza)`
-            : "📄 Mostrando todos los registros sin agrupación"
+            ? `📊 Vista optimizada: máximo ${maxPorNumero} registro(s) por número (evita duplicados, muestra los de mayor confianza)`
+            : "📄 Vista completa: todos los registros sin agrupación (puede mostrar múltiples detecciones del mismo número)"
           }
         </div>
         

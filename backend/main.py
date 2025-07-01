@@ -25,6 +25,7 @@ from typing import List, Dict, Optional, Any
 import crud 
 from utils.image_processing import run_detection_on_path, run_detection_on_frame, run_detection_on_frame_all_numbers, processor
 from utils.auto_capture_system import AutoCaptureManager, load_cameras_config 
+from utils.detection_consolidator import consolidate_video_detections, should_consolidate_detections, validate_consolidated_data
 from database import connect_to_mongo, close_mongo_connection, get_database 
 from collections import Counter # Keep if used elsewhere, not in provided snippets
 from schemas import VagonetaCreate, VagonetaInDB, HistorialResponse, RegistroHistorialDisplay
@@ -624,58 +625,60 @@ async def stream_video_processing(processing_id: str):
                 print(f"🔍 DEBUG - Tipo de final_detection_data: {type(final_detection_data)}")
                 print(f"🔍 DEBUG - Claves en final_detection_data: {list(final_detection_data.keys()) if isinstance(final_detection_data, dict) else 'No es dict'}")
                 if isinstance(final_detection_data, dict) and final_detection_data:
-                    # Procesar TODAS las detecciones (no solo la mejor)
                     registros_creados = []
                     
-                    print(f"🔍 DEBUG - Iniciando procesamiento de {len(final_detection_data)} números detectados")
-                    for numero_str, lista_detecciones in final_detection_data.items():
-                        print(f"🔍 DEBUG - Procesando número: {numero_str}, tipo: {type(lista_detecciones)}, datos: {lista_detecciones}")
-                        try:
-                            if isinstance(lista_detecciones, list):
-                                # Nueva estructura: lista de detecciones por número
-                                for deteccion in lista_detecciones:
-                                    confianza_val = deteccion.get('confianza', 0.0)
-                                    frame_num = deteccion.get('frame', 0)
-                                    imagen_path = deteccion.get('imagen_path', f"uploads/{Path(task_info['video_path']).name}")
-                                    
-                                    # Validar confianza
-                                    if confianza_val > 1.0:
-                                        print(f"Warning (VID:{processing_id}): Confianza {confianza_val} > 1.0 para N°{numero_str} frame {frame_num}. Capada a 1.0.")
-                                        confianza_val = 1.0
-                                    elif confianza_val < 0.0:
-                                        print(f"Warning (VID:{processing_id}): Confianza {confianza_val} < 0.0 para N°{numero_str} frame {frame_num}. Capada a 0.0.")
-                                        confianza_val = 0.0
-
-                                    # Crear registro individual
-                                    record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                    # NUEVA LÓGICA DE CONSOLIDACIÓN
+                    video_filename = Path(task_info['video_path']).name
+                    base_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                    
+                    # Verificar si necesita consolidación
+                    if should_consolidate_detections(final_detection_data):
+                        print(f"🔄 Aplicando consolidación de detecciones para video {video_filename}")
+                        consolidated_data = consolidate_video_detections(
+                            final_detection_data, 
+                            video_filename, 
+                            base_timestamp
+                        )
+                        
+                        if validate_consolidated_data(consolidated_data):
+                            # Procesar datos consolidados
+                            print(f"📊 Procesando {len(consolidated_data)} registros consolidados")
+                            for numero_str, datos_consolidados in consolidated_data.items():
+                                try:
+                                    record_timestamp = datos_consolidados['timestamp']
                                     if not isinstance(record_timestamp, datetime): 
                                         record_timestamp = datetime.now(timezone.utc)
                                     if record_timestamp.tzinfo is None: 
                                         record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
 
+                                    # Combinar metadata del task con metadata consolidado
+                                    combined_metadata = {
+                                        **(task_info.get("metadata") or {}),
+                                        **datos_consolidados.get('metadata_consolidado', {}),
+                                        "consolidation_applied": True,
+                                        "video_source": video_filename
+                                    }
+
                                     vagoneta_data = VagonetaCreate(
                                         numero=str(numero_str),
-                                        imagen_path=imagen_path,
+                                        imagen_path=datos_consolidados.get('imagen_path', f"uploads/{video_filename}"),
                                         timestamp=record_timestamp,
                                         tunel=task_info.get("tunel"),
                                         evento=task_info.get("evento"),
-                                        modelo_ladrillo=deteccion.get('modelo_ladrillo'),
+                                        modelo_ladrillo=datos_consolidados.get('modelo_ladrillo'),
                                         merma=parse_merma(task_info.get("merma_str")),
-                                        metadata={
-                                            **(task_info.get("metadata") or {}),
-                                            "frame_number": frame_num,
-                                            "video_source": Path(task_info['video_path']).name
-                                        },
-                                        confianza=confianza_val,
-                                        origen_deteccion="video_processing"
+                                        metadata=combined_metadata,
+                                        confianza=datos_consolidados.get('confianza', 0.0),
+                                        origen_deteccion="video_processing_consolidated"
                                     )
                                     
                                     record_id = await crud.create_vagoneta_record(vagoneta_data)
                                     registros_creados.append({
                                         "id": str(record_id),
                                         "numero": numero_str,
-                                        "confianza": confianza_val,
-                                        "frame": frame_num
+                                        "confianza": datos_consolidados.get('confianza', 0.0),
+                                        "total_detecciones": datos_consolidados.get('metadata_consolidado', {}).get('total_detecciones', 1),
+                                        "consolidado": True
                                     })
 
                                     db_record_dict = vagoneta_data.dict()
@@ -684,51 +687,127 @@ async def stream_video_processing(processing_id: str):
                                     if isinstance(db_record_dict.get("timestamp"), datetime):
                                         db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
 
-                                    # NO HACER YIELD AQUÍ - GUARDAR PARA DESPUÉS
-                                    print(f"✅ Registro creado para video {task_info['original_filename']} (Task:{processing_id}), N°: {numero_str}, Frame: {frame_num}, Conf: {confianza_val:.3f}, DB_ID: {record_id}")
+                                    print(f"✅ Registro consolidado creado para video {video_filename}, N°: {numero_str}, Conf: {datos_consolidados.get('confianza', 0.0):.3f}, Total detecciones: {datos_consolidados.get('metadata_consolidado', {}).get('total_detecciones', 1)}, DB_ID: {record_id}")
                                     
                                     # Broadcast via WebSocket
                                     broadcast_message = {"type": "new_detection", "data": db_record_dict}
                                     asyncio.create_task(manager.broadcast_json(broadcast_message))
-                            
-                            else:
-                                # Estructura antigua: compatibilidad hacia atrás
-                                confianza_val = float(lista_detecciones) if lista_detecciones else 0.0
-                                
-                                if confianza_val > 1.0:
-                                    confianza_val = 1.0
-                                elif confianza_val < 0.0:
-                                    confianza_val = 0.0
+                                    
+                                except Exception as e_consolidado:
+                                    print(f"❌ Error procesando registro consolidado {numero_str}: {str(e_consolidado)}")
+                                    print(f"   Traceback: {traceback.format_exc()}")
+                        else:
+                            print(f"❌ Validación de datos consolidados falló, procesando individualmente")
+                            # Fallback a procesamiento individual
+                            should_use_individual_processing = True
+                    else:
+                        print(f"ℹ️ No se requiere consolidación, procesando detecciones individuales")
+                        should_use_individual_processing = True
+                    
+                    # Procesamiento individual (fallback o cuando no se requiere consolidación)
+                    if 'should_use_individual_processing' in locals() and should_use_individual_processing:
+                        print(f"🔍 DEBUG - Iniciando procesamiento individual de {len(final_detection_data)} números detectados")
+                        for numero_str, lista_detecciones in final_detection_data.items():
+                            print(f"🔍 DEBUG - Procesando número: {numero_str}, tipo: {type(lista_detecciones)}, datos: {lista_detecciones}")
+                            try:
+                                if isinstance(lista_detecciones, list):
+                                    # Nueva estructura: lista de detecciones por número
+                                    for deteccion in lista_detecciones:
+                                        confianza_val = deteccion.get('confianza', 0.0)
+                                        frame_num = deteccion.get('frame', 0)
+                                        imagen_path = deteccion.get('imagen_path', f"uploads/{Path(task_info['video_path']).name}")
+                                        
+                                        # Validar confianza
+                                        if confianza_val > 1.0:
+                                            print(f"Warning (VID:{processing_id}): Confianza {confianza_val} > 1.0 para N°{numero_str} frame {frame_num}. Capada a 1.0.")
+                                            confianza_val = 1.0
+                                        elif confianza_val < 0.0:
+                                            print(f"Warning (VID:{processing_id}): Confianza {confianza_val} < 0.0 para N°{numero_str} frame {frame_num}. Capada a 0.0.")
+                                            confianza_val = 0.0
 
-                                record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
-                                if not isinstance(record_timestamp, datetime): 
-                                    record_timestamp = datetime.now(timezone.utc)
-                                if record_timestamp.tzinfo is None: 
-                                    record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
+                                        # Crear registro individual
+                                        record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                                        if not isinstance(record_timestamp, datetime): 
+                                            record_timestamp = datetime.now(timezone.utc)
+                                        if record_timestamp.tzinfo is None: 
+                                            record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
 
-                                vagoneta_data = VagonetaCreate(
-                                    numero=str(numero_str),
-                                    imagen_path=f"uploads/{Path(task_info['video_path']).name}",
-                                    timestamp=record_timestamp,
-                                    tunel=task_info.get("tunel"),
-                                    evento=task_info.get("evento"),
-                                    modelo_ladrillo=None,
-                                    merma=parse_merma(task_info.get("merma_str")),
-                                    metadata=task_info.get("metadata") or {},
-                                    confianza=confianza_val,
-                                    origen_deteccion="video_processing"
-                                )
+                                        vagoneta_data = VagonetaCreate(
+                                            numero=str(numero_str),
+                                            imagen_path=imagen_path,
+                                            timestamp=record_timestamp,
+                                            tunel=task_info.get("tunel"),
+                                            evento=task_info.get("evento"),
+                                            modelo_ladrillo=deteccion.get('modelo_ladrillo'),
+                                            merma=parse_merma(task_info.get("merma_str")),
+                                            metadata={
+                                                **(task_info.get("metadata") or {}),
+                                                "frame_number": frame_num,
+                                                "video_source": Path(task_info['video_path']).name
+                                            },
+                                            confianza=confianza_val,
+                                            origen_deteccion="video_processing"
+                                        )
+                                        
+                                        record_id = await crud.create_vagoneta_record(vagoneta_data)
+                                        registros_creados.append({
+                                            "id": str(record_id),
+                                            "numero": numero_str,
+                                            "confianza": confianza_val,
+                                            "frame": frame_num
+                                        })
+
+                                        db_record_dict = vagoneta_data.dict()
+                                        db_record_dict["_id"] = str(record_id)
+                                        db_record_dict["id"] = str(record_id)
+                                        if isinstance(db_record_dict.get("timestamp"), datetime):
+                                            db_record_dict["timestamp"] = db_record_dict["timestamp"].isoformat()
+
+                                        # NO HACER YIELD AQUÍ - GUARDAR PARA DESPUÉS
+                                        print(f"✅ Registro creado para video {task_info['original_filename']} (Task:{processing_id}), N°: {numero_str}, Frame: {frame_num}, Conf: {confianza_val:.3f}, DB_ID: {record_id}")
+                                        
+                                        # Broadcast via WebSocket
+                                        broadcast_message = {"type": "new_detection", "data": db_record_dict}
+                                        asyncio.create_task(manager.broadcast_json(broadcast_message))
                                 
-                                record_id = await crud.create_vagoneta_record(vagoneta_data)
-                                registros_creados.append({
-                                    "id": str(record_id),
-                                    "numero": numero_str,
-                                    "confianza": confianza_val
-                                })
-                        except Exception as e_numero:
-                            print(f"❌ Error procesando número {numero_str}: {str(e_numero)}")
-                            print(f"   Traceback: {traceback.format_exc()}")
-                            # Continuar con el siguiente número en lugar de fallar completamente
+                                else:
+                                    # Estructura antigua: compatibilidad hacia atrás
+                                    confianza_val = float(lista_detecciones) if lista_detecciones else 0.0
+                                    
+                                    if confianza_val > 1.0:
+                                        confianza_val = 1.0
+                                    elif confianza_val < 0.0:
+                                        confianza_val = 0.0
+
+                                    record_timestamp = task_info.get("timestamp", datetime.now(timezone.utc))
+                                    if not isinstance(record_timestamp, datetime): 
+                                        record_timestamp = datetime.now(timezone.utc)
+                                    if record_timestamp.tzinfo is None: 
+                                        record_timestamp = record_timestamp.replace(tzinfo=timezone.utc)
+
+                                    vagoneta_data = VagonetaCreate(
+                                        numero=str(numero_str),
+                                        imagen_path=f"uploads/{Path(task_info['video_path']).name}",
+                                        timestamp=record_timestamp,
+                                        tunel=task_info.get("tunel"),
+                                        evento=task_info.get("evento"),
+                                        modelo_ladrillo=None,
+                                        merma=parse_merma(task_info.get("merma_str")),
+                                        metadata=task_info.get("metadata") or {},
+                                        confianza=confianza_val,
+                                        origen_deteccion="video_processing"
+                                    )
+                                    
+                                    record_id = await crud.create_vagoneta_record(vagoneta_data)
+                                    registros_creados.append({
+                                        "id": str(record_id),
+                                        "numero": numero_str,
+                                        "confianza": confianza_val
+                                    })
+                            except Exception as e_numero:
+                                print(f"❌ Error procesando número {numero_str}: {str(e_numero)}")
+                                print(f"   Traceback: {traceback.format_exc()}")
+                                # Continuar con el siguiente número en lugar de fallar completamente
 
                     print(f"📊 Total de {len(registros_creados)} registros creados para video {task_info['original_filename']}")
                     yield f"data: {json.dumps({'type': 'processing_complete', 'total_records': len(registros_creados), 'records': registros_creados})}\n\n"

@@ -64,6 +64,47 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
     };
     fetchModelInfo();
   }, []);
+
+  // Monitor changes in fileProgress and activeEventSources to check if processing is complete
+  useEffect(() => {
+    // Only check if we're currently loading and have files to process
+    if (loading && files.length > 0) {
+      const allOriginalFileNames = files.map(f => f.name);
+      const processedFileProgressEntries = Object.values(fileProgress).filter(fp => allOriginalFileNames.includes(fp.name));
+
+      const allFilesHaveTerminalStatus = processedFileProgressEntries.length === files.length &&
+        processedFileProgressEntries.every(fp =>
+          fp.status === 'completed' || fp.status === 'error' || fp.status === 'ignored'
+        );
+
+      const noActiveEventSources = Object.keys(activeEventSources).length === 0;
+
+      console.log("Auto-checking completion:", 
+          { allFilesHaveTerminalStatus, noActiveEventSources, filesLength: files.length }
+      );
+
+      if (allFilesHaveTerminalStatus && noActiveEventSources) {
+        console.log("Auto-detection: All files processed, stopping spinner.");
+        setLoading(false);
+      }
+    }
+  }, [fileProgress, activeEventSources, loading, files]);
+
+  // Calculate overall progress
+  const getOverallProgress = () => {
+    if (!loading || files.length === 0) return 100;
+    
+    const progressEntries = Object.values(fileProgress);
+    if (progressEntries.length === 0) return 0;
+    
+    const totalFiles = files.length;
+    const completedFiles = progressEntries.filter(p => 
+      p.status === 'completed' || p.status === 'error' || p.status === 'ignored'
+    ).length;
+    
+    return Math.round((completedFiles / totalFiles) * 100);
+  };
+
   const handleChange = (e) => {
     setFiles(Array.from(e.target.files));
     setFeedback(null); // Clear previous feedback
@@ -82,22 +123,18 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
     const allOriginalFileNames = files.map(f => f.name);
     const processedFileProgressEntries = Object.values(fileProgress).filter(fp => allOriginalFileNames.includes(fp.name));
 
-    const allFilesHaveTerminalStatusInPorgress = processedFileProgressEntries.length === files.length &&
+    const allFilesHaveTerminalStatus = processedFileProgressEntries.length === files.length &&
       processedFileProgressEntries.every(fp =>
         fp.status === 'completed' || fp.status === 'error' || fp.status === 'ignored'
       );
 
-    const noActiveEventSources = Object.keys(activeEventSources).length === 0;
+    const noActiveEventSources = Object.keys(activeEventSources).length === 0;      console.log("Manual checkAllFilesProcessed:", 
+        { allFilesHaveTerminalStatus, noActiveEventSources, filesLength: files.length }
+      );
 
-    console.log("CheckAllFilesProcessed:", 
-        { allFilesHaveTerminalStatusInPorgress, noActiveEventSources, filesLength: files.length, fileProgressCount: Object.keys(fileProgress).length }
-    );
-    // console.log("Current fileProgress state:", JSON.parse(JSON.stringify(fileProgress)));
-    // console.log("Current allFilesResults state:", JSON.parse(JSON.stringify(allFilesResults)));
-
-    if (allFilesHaveTerminalStatusInPorgress && noActiveEventSources && files.length > 0) {
+    if (allFilesHaveTerminalStatus && noActiveEventSources && files.length > 0) {
       setLoading(false);
-      console.log("All files definitively processed. Generating final feedback.");
+      console.log("Manual check: All files definitively processed. Generating final feedback.");
 
       const finalResultsForFeedback = files.map(originalFile => {
         const fileProgressEntryKey = Object.keys(fileProgress).find(key => fileProgress[key].name === originalFile.name);
@@ -212,6 +249,43 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
         } else if (data.type === 'final_result') {
           serverMessage = data.message || "Análisis de video completado, esperando registro en BD.";
           currentProgressState = { resultDataFromStream: data.data }; 
+        } else if (data.type === 'processing_complete') {
+          // Manejar registros consolidados creados
+          isTerminalEvent = true;
+          shouldCloseEventSource = true;
+          const records = data.records || [];
+          const totalRecords = data.total_records || records.length;
+          
+          if (totalRecords > 0) {
+            const recordsSummary = records.map(r => {
+              const consolidatedText = r.consolidado ? ` (${r.total_detecciones} det.)` : '';
+              return `N°${r.numero}${consolidatedText}`;
+            }).join(', ');
+            
+            setAllFilesResults(prevResults => [...prevResults, {
+              fileId,
+              filename,
+              status: 'ok',
+              message: `${totalRecords} registro(s) creado(s): ${recordsSummary}`,
+              records: records,
+              total_records: totalRecords
+            }]);
+            
+            currentProgressState = {
+              status: 'completed',
+              result: { records: records, total_records: totalRecords },
+            };
+            serverMessage = `${totalRecords} registro(s) creado(s): ${recordsSummary}`;
+          } else {
+            setAllFilesResults(prevResults => [...prevResults, {
+              fileId,
+              filename,
+              status: 'ignored',
+              message: 'Procesamiento completado pero no se crearon registros'
+            }]);
+            currentProgressState = { status: 'ignored' };
+            serverMessage = 'Procesamiento completado pero no se crearon registros';
+          }
         } else if (data.type === 'db_record_created') {
           isTerminalEvent = true;
           shouldCloseEventSource = true;
@@ -330,12 +404,20 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
         ...prev,
         [fileId]: { ...prev[fileId], status: 'error', serverMessage: `Error de conexión con el stream de ${filename}.` }
       }));
-      eventSource.close();
+      
+      // Cerrar la conexión de forma segura
+      try {
+        eventSource.close();
+      } catch (e) {
+        console.warn("Error cerrando EventSource:", e);
+      }
+      
       setActiveEventSources(prev => {
         const newSources = { ...prev };
         delete newSources[fileId];
         return newSources;
       });
+      
       // Add a result to allFilesResults to signify this connection error
       setAllFilesResults(prevResults => {
         if (!prevResults.find(r => r.fileId === fileId)) {
@@ -507,24 +589,44 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
   };
 
   const handleCancelUpload = () => {
+    console.log("Cancelando procesamiento...");
+    
     if (abortController) {
-      abortController.abort();
-      setLoading(false);
-      // Update feedback for any files that were in 'uploading' or 'pending' state
-      const updatedFileProgress = { ...fileProgress };
-      Object.keys(updatedFileProgress).forEach(fileId => {
-        if (updatedFileProgress[fileId].status === 'uploading' || updatedFileProgress[fileId].status === 'pending' || updatedFileProgress[fileId].status === 'finalizing' || updatedFileProgress[fileId].status === 'server_processing') {
-          updatedFileProgress[fileId].status = 'error'; // or 'cancelled'
-          updatedFileProgress[fileId].serverMessage = 'Carga/Procesamiento cancelado por el usuario.';
-        }
-      });
-      setFileProgress(updatedFileProgress);
-      setFeedback({ status: "info", message: "Carga y procesamiento cancelados por el usuario." });
-      Object.values(activeEventSources).forEach(source => source.close());
-      setActiveEventSources({});
-      console.log("Upload and processing cancelled by user.");
-      checkAllFilesProcessed(); // Re-check to update overall status
+      try {
+        abortController.abort();
+      } catch (e) {
+        console.warn("Error abortando controlador:", e);
+      }
     }
+    
+    setLoading(false);
+    
+    // Cerrar todas las conexiones EventSource de forma segura
+    Object.values(activeEventSources).forEach(source => {
+      try {
+        source.close();
+      } catch (e) {
+        console.warn("Error cerrando EventSource:", e);
+      }
+    });
+    setActiveEventSources({});
+    
+    // Update feedback for any files that were in 'uploading' or 'pending' state
+    const updatedFileProgress = { ...fileProgress };
+    Object.keys(updatedFileProgress).forEach(fileId => {
+      if (updatedFileProgress[fileId].status === 'uploading' || 
+          updatedFileProgress[fileId].status === 'pending' || 
+          updatedFileProgress[fileId].status === 'finalizing' || 
+          updatedFileProgress[fileId].status === 'server_processing') {
+        updatedFileProgress[fileId].status = 'error';
+        updatedFileProgress[fileId].serverMessage = 'Carga/Procesamiento cancelado por el usuario.';
+      }
+    });
+    setFileProgress(updatedFileProgress);
+    setFeedback({ status: "info", message: "Carga y procesamiento cancelados por el usuario." });
+    
+    console.log("Procesamiento cancelado exitosamente.");
+    checkAllFilesProcessed(); // Re-check to update overall status
   };
   return (
     <div className="w-full max-w-4xl mx-auto bg-white rounded-lg border border-slate-200 p-8 mt-6 mb-8">
@@ -562,13 +664,42 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
           />
           <label htmlFor="file-upload" className={`cursor-pointer ${loading ? 'cursor-not-allowed' : ''}`}>
             <span className="text-lg font-medium text-slate-700">
-              Haz clic para seleccionar archivos
+              {files.length > 0 ? 'Cambiar archivos seleccionados' : 'Haz clic para seleccionar archivos'}
             </span>
             <p className="text-slate-500 mt-1">
               Soporta imágenes (JPG, PNG) y videos (MP4, AVI)
             </p>
           </label>
-        </div>        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+        </div>
+
+        {/* Mostrar archivos seleccionados */}
+        {files.length > 0 && !loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center mb-3">
+              <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="text-sm font-medium text-blue-800">
+                {files.length} archivo{files.length > 1 ? 's' : ''} seleccionado{files.length > 1 ? 's' : ''}
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {files.map((file, index) => (
+                <div key={index} className="flex items-center text-sm text-blue-700 bg-blue-100 rounded px-3 py-2">
+                  <span className="mr-2">
+                    {file.type.startsWith('video/') ? '🎥' : '🖼️'}
+                  </span>
+                  <span className="flex-1 truncate">{file.name}</span>
+                  <span className="text-xs text-blue-600 ml-2">
+                    ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
           <div>
             <label htmlFor="evento" className="block text-sm font-medium text-slate-700 mb-2">Evento</label>
             <select 
@@ -599,7 +730,14 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
             disabled={loading || files.length === 0}
             className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors duration-200 flex"
           >
-            {loading ? <><Spinner size={20} /> <span className="ml-2">Procesando...</span></> : "📤 Iniciar Procesamiento"}
+            {loading ? (
+              <>
+                <Spinner size={20} />
+                <span className="ml-2">
+                  Procesando... {getOverallProgress()}%
+                </span>
+              </>
+            ) : "📤 Iniciar Procesamiento"}
           </button>
           {loading && (
             <button
@@ -610,6 +748,47 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
               🛑 Cancelar
             </button>
           )}
+          {/* Mostrar botón para procesar nuevos archivos cuando el procesamiento esté completo */}
+          {!loading && Object.keys(fileProgress).length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                console.log("Reiniciando componente para nuevos archivos...");
+                
+                // Cerrar todas las conexiones activas
+                Object.values(activeEventSources).forEach(source => {
+                  try {
+                    source.close();
+                  } catch (e) {
+                    console.warn("Error cerrando EventSource:", e);
+                  }
+                });
+                
+                // Cancelar el controlador de abort si existe
+                if (abortController) {
+                  try {
+                    abortController.abort();
+                  } catch (e) {
+                    console.warn("Error abortando controlador:", e);
+                  }
+                }
+                
+                // Limpiar todos los estados
+                setFiles([]);
+                setFileProgress({});
+                setFeedback(null);
+                setAllFilesResults([]);
+                setActiveEventSources({});
+                setAbortController(null);
+                setLoading(false);
+                
+                console.log("Estado reiniciado completamente.");
+              }}
+              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-green-300 text-base font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 flex"
+            >
+              🔄 Procesar Nuevos Archivos
+            </button>
+          )}
         </div>
       </form>
 
@@ -617,11 +796,21 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
         <div className="mt-6">
           <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
         </div>
-      )}{Object.keys(fileProgress).length > 0 && (
+      )}      {Object.keys(fileProgress).length > 0 && (
         <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-6">
-          <h3 className="text-xl font-medium text-slate-800 mb-4 pb-3 border-b border-slate-200">
-            Detalle del Procesamiento:
-          </h3>
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
+            <h3 className="text-xl font-medium text-slate-800">
+              Detalle del Procesamiento
+            </h3>
+            {!loading && (
+              <div className="flex items-center text-green-600">
+                <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-sm font-medium">Procesamiento Completado</span>
+              </div>
+            )}
+          </div>
           <div className="space-y-4">{Object.entries(fileProgress).map(([fileId, progress]) => {
               // eslint-disable-next-line no-unused-vars
               const originalFile = files.find(f => f.name === progress.name);
@@ -707,9 +896,21 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
 
                   {progress.status === 'completed' && progress.result && (
                     <div className="mt-2 text-xs p-2 bg-green-50 border border-green-200 rounded">
-                      <p><strong>Número:</strong> {progress.result.numero || progress.result.numero_detectado || 'N/A'}</p>
-                      <p><strong>Confianza:</strong> {progress.result.confianza ? (progress.result.confianza * 100).toFixed(1) + '%' : 'N/A'}</p>
-                      {progress.result.message && !progress.serverMessage.includes(progress.result.message) && <p><strong>Msg:</strong> {progress.result.message}</p>}
+                      {/* Si hay múltiples registros creados, mostrar un resumen */}
+                      {progress.serverMessage && progress.serverMessage.includes('registro(s) creado(s)') ? (
+                        <p><strong>Procesamiento completado</strong> - Ver detalles arriba</p>
+                      ) : (
+                        /* Si es un solo registro, mostrar detalles específicos */
+                        <>
+                          {(progress.result.numero || progress.result.numero_detectado) && (
+                            <p><strong>Número:</strong> {progress.result.numero || progress.result.numero_detectado}</p>
+                          )}
+                          {progress.result.confianza && (
+                            <p><strong>Confianza:</strong> {(progress.result.confianza * 100).toFixed(1)}%</p>
+                          )}
+                        </>
+                      )}
+                      {progress.result.message && !progress.serverMessage?.includes(progress.result.message) && <p><strong>Msg:</strong> {progress.result.message}</p>}
                     </div>
                   )}
                   {progress.status === 'error' && progress.result && progress.result.message && (
