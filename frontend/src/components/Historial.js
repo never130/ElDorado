@@ -119,6 +119,8 @@ const Historial = () => {
     }
     setSortConfig({ key, direction });
     
+    console.log(`Ordenando por ${key} en dirección ${direction}`);
+    
     // Recargar datos con nuevo ordenamiento
     fetchHistorial(1, true);
   };
@@ -147,7 +149,7 @@ const Historial = () => {
     setCurrentPage(1);
     // Mantener agrupación por defecto
     setAgruparPorNumero(true);
-    setMaxPorNumero(2);
+    setMaxPorNumero(1); // Corregido: era 2, debería ser 1 por defecto
   };
   const downloadCSV = () => {
     const headers = ["Numero Detectado", "Evento", "Túnel", "Modelo", "Confianza (%)", "Fecha"];    const rows = sortedHistorial.map(item => [
@@ -288,6 +290,26 @@ const Historial = () => {
           </span>
         </div>
       </div>      <div className="overflow-x-auto">
+        {sortedHistorial.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-slate-400 text-lg mb-2">📭</div>
+            <p className="text-slate-500 text-lg font-medium mb-2">No hay registros que mostrar</p>
+            <p className="text-slate-400 text-sm">
+              {searchTerm || fechaInicio || fechaFin ? 
+                'Intenta ajustar los filtros de búsqueda' : 
+                'Aún no se han procesado imágenes o videos'
+              }
+            </p>
+            {(searchTerm || fechaInicio || fechaFin) && (
+              <button 
+                onClick={clearFilters}
+                className="mt-4 px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+        ) : (
         <table className="min-w-full bg-white border border-slate-200 rounded-lg overflow-hidden">
           <thead className="bg-slate-50">
             <tr>
@@ -369,16 +391,20 @@ const Historial = () => {
                         className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-slate-200"
                         onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
                         onError={(e) => {
+                          console.warn(`Error cargando imagen: ${item.imagen_path}`);
                           e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'inline-block';
+                          const fallbackElement = e.target.nextSibling;
+                          if (fallbackElement) {
+                            fallbackElement.style.display = 'inline-block';
+                          }
                         }}
                       />
-                      <button
-                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
-                        className="text-orange-600 hover:text-orange-800 underline text-xs hidden"
+                      <span
+                        className="text-slate-400 italic text-xs hidden"
+                        style={{display: 'none'}}
                       >
-                        Ver imagen
-                      </button>
+                        Imagen no disponible
+                      </span>
                     </div>
                   ) : (
                     <span className="text-slate-400 italic text-xs">Sin imagen</span>
@@ -388,6 +414,7 @@ const Historial = () => {
             ))}
           </tbody>
         </table>
+        )}
       </div>      {/* Información de paginación y controles */}
       <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-4">
@@ -409,17 +436,17 @@ const Historial = () => {
             <button 
               onClick={handlePreviousPage}
               disabled={currentPage === 1 || loading}
-              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-1"
             >
-              ← Anterior
+              {loading ? <Spinner size={12} /> : '←'} Anterior
             </button>
             
             <button 
               onClick={handleNextPage}
               disabled={!hasMore || loading}
-              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-1"
             >
-              Siguiente →
+              Siguiente {loading ? <Spinner size={12} /> : '→'}
             </button>
           </div>
         </div>
