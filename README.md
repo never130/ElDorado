@@ -87,7 +87,7 @@ ElDorado/
 │
 └── uploads/                     # 📁 Directorio global de archivos
     └── temp_chunks/             # 🗂️ Archivos temporales de subida
-
+```
 
 ##  Tecnologías Utilizadas
 
