@@ -26,6 +26,7 @@ import crud
 from utils.image_processing import run_detection_on_path, run_detection_on_frame, run_detection_on_frame_all_numbers, processor
 from utils.auto_capture_system import AutoCaptureManager, load_cameras_config 
 from utils.detection_consolidator import consolidate_video_detections, should_consolidate_detections, validate_consolidated_data
+from utils.report_generator import AutoReportGenerator, ReportType, ReportFrequency, schedule_daily_reports, generate_weekly_executive_summary
 from database import connect_to_mongo, close_mongo_connection, get_database 
 from collections import Counter # Keep if used elsewhere, not in provided snippets
 from schemas import VagonetaCreate, VagonetaInDB, HistorialResponse, RegistroHistorialDisplay
@@ -1399,6 +1400,376 @@ if __name__ == "__main__":
         print(f"❌ Error iniciando servidor: {e}")
         import traceback
         traceback.print_exc()
+
+# ====================
+# ENDPOINTS DE REPORTES AUTOMÁTICOS
+# ====================
+
+@app.get("/reports/daily")
+async def get_daily_report(
+    date: Optional[str] = Query(None, description="Fecha en formato YYYY-MM-DD (por defecto ayer)")
+):
+    """
+    Genera un reporte diario de actividad
+    
+    Args:
+        date: Fecha objetivo en formato YYYY-MM-DD (opcional, por defecto ayer)
+    
+    Returns:
+        Reporte diario con métricas, distribución horaria, túneles, etc.
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        target_date = None
+        if date:
+            try:
+                target_date = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+        
+        report = await generator.generate_daily_report(target_date)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "date": report.date,
+            "metrics": {
+                "total_detections": report.metrics.total_detections,
+                "unique_numbers": report.metrics.unique_numbers,
+                "avg_confidence": report.metrics.avg_confidence,
+                "period_start": report.metrics.period_start.isoformat(),
+                "period_end": report.metrics.period_end.isoformat(),
+                "success_rate": report.metrics.success_rate,
+                "processing_time_avg": report.metrics.processing_time_avg
+            },
+            "hourly_distribution": report.hourly_distribution,
+            "tunnel_breakdown": report.tunnel_breakdown,
+            "top_numbers": report.top_numbers,
+            "quality_summary": report.quality_summary,
+            "alerts": report.alerts
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "daily",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando reporte diario: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando reporte diario: {str(e)}")
+
+@app.get("/reports/productivity")
+async def get_productivity_report(
+    days_back: int = Query(7, description="Número de días hacia atrás para analizar", ge=1, le=30)
+):
+    """
+    Genera un reporte de productividad y eficiencia por túneles
+    
+    Args:
+        days_back: Número de días hacia atrás para analizar (1-30)
+    
+    Returns:
+        Reporte de productividad con análisis por túnel, turnos y tendencias
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        report = await generator.generate_productivity_report(days_back)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "period": report.period,
+            "tunnel_performance": report.tunnel_performance,
+            "shift_analysis": report.shift_analysis,
+            "efficiency_trends": report.efficiency_trends,
+            "bottlenecks": report.bottlenecks,
+            "recommendations": report.recommendations
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "productivity",
+            "period_analyzed": f"{days_back} días",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando reporte de productividad: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando reporte de productividad: {str(e)}")
+
+@app.get("/reports/quality")
+async def get_quality_report(
+    days_back: int = Query(7, description="Número de días hacia atrás para analizar", ge=1, le=30)
+):
+    """
+    Genera un reporte de calidad y análisis de merma
+    
+    Args:
+        days_back: Número de días hacia atrás para analizar (1-30)
+    
+    Returns:
+        Reporte de calidad con análisis de defectos, merma y precisión del modelo
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        report = await generator.generate_quality_report(days_back)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "period": report.period,
+            "defect_rate": report.defect_rate,
+            "merma_analysis": report.merma_analysis,
+            "confidence_distribution": report.confidence_distribution,
+            "model_accuracy": report.model_accuracy,
+            "quality_trends": report.quality_trends
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "quality",
+            "period_analyzed": f"{days_back} días",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando reporte de calidad: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando reporte de calidad: {str(e)}")
+
+@app.get("/reports/efficiency")
+async def get_efficiency_report(
+    days_back: int = Query(7, description="Número de días hacia atrás para analizar", ge=1, le=30)
+):
+    """
+    Genera un reporte de eficiencia del sistema de detección
+    
+    Args:
+        days_back: Número de días hacia atrás para analizar (1-30)
+    
+    Returns:
+        Reporte de eficiencia con métricas de rendimiento del sistema
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        report = await generator.generate_efficiency_report(days_back)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "period": report.period,
+            "system_uptime": report.system_uptime,
+            "detection_accuracy": report.detection_accuracy,
+            "processing_speed": report.processing_speed,
+            "error_rates": report.error_rates,
+            "performance_trends": report.performance_trends,
+            "optimization_suggestions": report.optimization_suggestions
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "efficiency",
+            "period_analyzed": f"{days_back} días",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando reporte de eficiencia: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando reporte de eficiencia: {str(e)}")
+
+@app.get("/reports/alerts")
+async def get_alerts_report(
+    days_back: int = Query(7, description="Número de días hacia atrás para analizar", ge=1, le=30)
+):
+    """
+    Genera un reporte de alertas y anomalías detectadas
+    
+    Args:
+        days_back: Número de días hacia atrás para analizar (1-30)
+    
+    Returns:
+        Reporte de alertas con anomalías y patrones inusuales
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        report = await generator.generate_alerts_report(days_back)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "period": report.period,
+            "critical_alerts": report.critical_alerts,
+            "warning_alerts": report.warning_alerts,
+            "anomalies_detected": report.anomalies_detected,
+            "pattern_analysis": report.pattern_analysis,
+            "recommendations": report.recommendations
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "alerts",
+            "period_analyzed": f"{days_back} días",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando reporte de alertas: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando reporte de alertas: {str(e)}")
+
+@app.get("/reports/executive")
+async def get_executive_summary(
+    days_back: int = Query(7, description="Número de días hacia atrás para analizar", ge=1, le=90)
+):
+    """
+    Genera un resumen ejecutivo para la gerencia
+    
+    Args:
+        days_back: Número de días hacia atrás para analizar (1-90)
+    
+    Returns:
+        Resumen ejecutivo con KPIs principales y tendencias
+    """
+    try:
+        db = await get_database()
+        generator = AutoReportGenerator(db)
+        
+        report = await generator.generate_executive_summary(days_back)
+        
+        # Convertir el reporte a diccionario para JSON
+        report_dict = {
+            "period": report.period,
+            "kpis": report.kpis,
+            "trends": report.trends,
+            "achievements": report.achievements,
+            "concerns": report.concerns,
+            "action_items": report.action_items,
+            "forecast": report.forecast
+        }
+        
+        return {
+            "status": "success",
+            "report_type": "executive",
+            "period_analyzed": f"{days_back} días",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data": report_dict
+        }
+        
+    except Exception as e:
+        print(f"❌ Error generando resumen ejecutivo: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando resumen ejecutivo: {str(e)}")
+
+@app.get("/reports/list")
+async def list_available_reports():
+    """
+    Lista todos los tipos de reportes disponibles
+    
+    Returns:
+        Lista de reportes disponibles con descripción
+    """
+    reports = [
+        {
+            "type": "daily",
+            "name": "Reporte Diario",
+            "description": "Actividad diaria con métricas, distribución horaria y alertas",
+            "endpoint": "/reports/daily",
+            "parameters": ["date (opcional)"]
+        },
+        {
+            "type": "productivity",
+            "name": "Reporte de Productividad",
+            "description": "Análisis de productividad por túneles y turnos",
+            "endpoint": "/reports/productivity",
+            "parameters": ["days_back (1-30)"]
+        },
+        {
+            "type": "quality",
+            "name": "Reporte de Calidad",
+            "description": "Análisis de calidad, merma y precisión del modelo",
+            "endpoint": "/reports/quality",
+            "parameters": ["days_back (1-30)"]
+        },
+        {
+            "type": "efficiency",
+            "name": "Reporte de Eficiencia",
+            "description": "Métricas de rendimiento del sistema de detección",
+            "endpoint": "/reports/efficiency",
+            "parameters": ["days_back (1-30)"]
+        },
+        {
+            "type": "alerts",
+            "name": "Reporte de Alertas",
+            "description": "Anomalías y patrones inusuales detectados",
+            "endpoint": "/reports/alerts",
+            "parameters": ["days_back (1-30)"]
+        },
+        {
+            "type": "executive",
+            "name": "Resumen Ejecutivo",
+            "description": "KPIs principales y tendencias para la gerencia",
+            "endpoint": "/reports/executive",
+            "parameters": ["days_back (1-90)"]
+        }
+    ]
+    
+    return {
+        "status": "success",
+        "available_reports": reports,
+        "total_reports": len(reports),
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+@app.post("/reports/schedule")
+async def schedule_report_generation():
+    """
+    Programa la generación automática de reportes diarios
+    
+    Returns:
+        Resultado de la programación automática
+    """
+    try:
+        db = await get_database()
+        
+        # Generar reporte diario automático
+        daily_report = await schedule_daily_reports(db)
+        
+        # Generar resumen ejecutivo semanal si es apropiado
+        executive_summary = await generate_weekly_executive_summary(db)
+        
+        return {
+            "status": "success",
+            "message": "Reportes automáticos programados exitosamente",
+            "daily_report_generated": daily_report is not None,
+            "executive_summary_generated": executive_summary is not None,
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ Error programando reportes automáticos: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error programando reportes automáticos: {str(e)}")
 
 # ====================
 # ENDPOINT DE PRUEBA PARA VERIFICAR CRUD ASÍNCRONO

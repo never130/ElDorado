@@ -29,6 +29,9 @@ const Navbar = ({ view, setView }) => {
           <button onClick={() => { setView('historial'); setOpen(false); }} className={`w-full md:w-auto py-2.5 px-4 font-medium rounded-md m-1 md:m-0 transition-colors ${view === 'historial' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
             Historial
           </button>
+          <button onClick={() => { setView('reports'); setOpen(false); }} className={`w-full md:w-auto py-2.5 px-4 font-medium rounded-md m-1 md:m-0 transition-colors ${view === 'reports' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
+            Reportes
+          </button>
           <button onClick={() => { setView('manual'); setOpen(false); }} className={`w-full md:w-auto py-2.5 px-4 font-medium rounded-md m-1 md:m-0 transition-colors ${view === 'manual' ? 'bg-orange-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>
             Ayuda
           </button>

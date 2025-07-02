@@ -6,6 +6,7 @@ import RealTimeMonitorNew from "./components/RealTimeMonitorNew";
 import Trayectoria from "./components/Trayectoria";
 import ManualUsuario from "./components/ManualUsuario";
 import ModelConfig from "./components/ModelConfig";
+import Reports from "./components/Reports";
 import Navbar from "./components/Navbar";
 import "./App.css";
 
@@ -21,6 +22,7 @@ const App = () => {
         {view === "trayectoria" && <Trayectoria />}
         {view === "manual" && <ManualUsuario />}
         {view === "config" && <ModelConfig />}
+        {view === "reports" && <Reports />}
       </main>
     </div>
   );
