@@ -1,173 +1,429 @@
-# 🖥️ Frontend - Sistema de Detección de Números Calados
+# 🌐 Frontend - Sistema El Dorado
 
 ## 📋 Descripción
-Interfaz web moderna desarrollada en React para interactuar con el sistema de detección de números calados, visualizar resultados en tiempo real, consultar historial detallado y acceder a documentación educativa completa.
 
-## 🎯 ¿Qué hace?
-- **Visualización en Tiempo Real**: Interfaz para monitorear detecciones de números calados
-- **Carga de Archivos**: Subida de imágenes y videos para procesamiento con YOLO
-- **Historial Inteligente**: Consulta avanzada con filtros por fecha, número y confianza
-- **Trayectoria Visual**: Seguimiento temporal detallado de vagonetas específicas
-- **Manual Educativo**: Documentación completa sobre el sistema de números calados
-- **Captura desde Cámaras**: Control directo de cámaras físicas para detección automática
+Interfaz web moderna desarrollada en React para el Sistema El Dorado de detección de números en vagonetas de carga. Proporciona una experiencia de usuario intuitiva para monitorear detecciones en tiempo real, gestionar archivos multimedia, consultar historial detallado y acceder a reportes estadísticos completos.
 
-## Instalación rápida
+## 🎯 Características Principales
 
-### Requisitos previos
-- Node.js 16+
-- npm
-- Git
+- **📡 Monitor en Tiempo Real**: Visualización de detecciones en vivo con WebSockets
+- **📤 Gestión de Archivos**: Subida y procesamiento de imágenes y videos con IA
+- **📋 Historial Inteligente**: Consulta avanzada con filtros por fecha, número y confianza
+- **📊 Dashboard de Reportes**: Análisis estadístico y visualización de tendencias
+- **🗺️ Análisis de Trayectorias**: Seguimiento temporal de vagonetas específicas
+- **📖 Manual Integrado**: Documentación completa del sistema accesible desde la interfaz
+- **📹 Control de Cámaras**: Gestión directa de cámaras físicas para monitoreo automático
+- **🎨 Diseño Responsivo**: Interfaz adaptable a desktop, tablet y móvil
 
-### 1. Clona el repositorio
-```bash
-# Clona el repositorio y entra al frontend
- git clone <URL_DEL_REPOSITORIO>
- cd ElDorado/frontend
+## 🏗️ Arquitectura Frontend
+
+```
+src/
+├── App.js                    # 🏗️ Componente principal y enrutamiento
+├── index.js                  # 🚪 Punto de entrada React
+├── index.css                 # 🎨 Estilos globales con Tailwind CSS
+├── App.css                   # 🎭 Estilos específicos de componentes
+│
+└── components/               # 🧩 Componentes React reutilizables
+    ├── Navbar.js            # 🧭 Navegación principal responsiva
+    ├── Upload.js            # 📤 Subida de archivos con drag & drop
+    ├── Historial.js         # 📋 Tabla de resultados con filtros avanzados
+    ├── RealTimeMonitorNew.js # 📡 Monitor en tiempo real con WebSockets
+    ├── Reports.js           # 📊 Dashboard de reportes y estadísticas
+    ├── Trayectoria.js       # 🗺️ Visualización de rutas de vagonetas
+    ├── ManualUsuario.js     # 📖 Manual de usuario integrado
+    ├── ModelConfig.js       # ⚙️ Configuración del modelo IA
+    ├── Spinner.js           # ⏳ Componente de loading
+    ├── VideoPlayer.js       # ▶️ Reproductor de video
+    ├── CameraCapture.js     # 📹 Captura desde cámara
+    └── ui/                  # 🎨 Componentes UI base
 ```
 
-### 2. Instala las dependencias
+## 🛠️ Stack Tecnológico
+
+### Framework Principal
+- **React 19**: Biblioteca para interfaces de usuario modernas
+- **JavaScript ES6+**: Sintaxis moderna con async/await y módulos
+- **React Hooks**: useState, useEffect, useCallback para gestión de estado
+
+### Diseño y Estilos
+- **Tailwind CSS**: Framework CSS utilitario para diseño responsivo
+- **CSS Grid/Flexbox**: Layouts adaptativos a diferentes dispositivos
+- **React Icons**: Iconografía moderna y consistente
+
+### Comunicación
+- **Axios**: Cliente HTTP para comunicación asíncrona con backend
+- **WebSocket API**: Conexión en tiempo real para actualizaciones instantáneas
+- **File API**: Manejo nativo del navegador para archivos
+
+### Funcionalidades Avanzadas
+- **Drag & Drop**: Interfaz intuitiva para carga de archivos
+- **Real-time Updates**: Actualizaciones instantáneas vía WebSocket
+- **Responsive Design**: Adaptable a todos los dispositivos
+- **Progressive Enhancement**: Funcionalidad básica garantizada
+
+## 🚀 Instalación y Configuración
+
+### � Prerrequisitos
+- **Node.js 18+** y **npm 9+**
+- **Git** para control de versiones
+- **Backend API** ejecutándose en puerto 8000
+
+### 1. � Clonar e Instalar
+
 ```bash
+# Clonar el repositorio
+git clone https://github.com/never130/ElDorado.git
+cd ElDorado/frontend
+
+# Instalar dependencias
 npm install
 ```
 
-### 3. Configura la URL del backend (opcional)
-Por defecto, el frontend está configurado para conectarse al backend en `http://localhost:8000`. Si necesitas usar otro puerto o dominio, modifica la configuración en `src/config/api.js`:
+### 2. ⚙️ Configuración (Opcional)
 
-```javascript
-// src/config/api.js
-const API_BASE_URL = 'http://localhost:8000'; // Cambiar si es necesario
+Crear archivo `.env` para variables de entorno:
+
+```env
+# Configuración de API
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_WS_URL=ws://localhost:8000/ws/detections
+
+# Configuración de desarrollo
+GENERATE_SOURCEMAP=false
+REACT_APP_DEBUG=true
 ```
 
-### 4. Inicia la aplicación
+### 3. 🚀 Ejecutar la Aplicación
+
 ```bash
+# Desarrollo
 npm start
+
+# Build para producción
+npm run build
+
+# Servir build localmente
+npm run serve
 ```
 
-La app se abrirá en tu navegador en http://localhost:3000
+### 4. 🌐 Acceso
 
-## 🚀 Funcionalidades principales
+- **Desarrollo**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Documentación API**: http://localhost:8000/docs
 
-### 🎥 **Captura en Tiempo Real**
-- Conexión directa con cámaras físicas para detección automática
-- Visualización en vivo del stream de video
-- Control de inicio/parada de captura por cámara
-- Sistema de cooldown inteligente para evitar duplicados
+## � Funcionalidades del Sistema
 
-### 📤 **Carga de Archivos**
-- **Imágenes**: Soporte para JPG, PNG, WEBP con vista previa
-- **Videos**: Procesamiento completo de MP4, AVI, MOV frame por frame
-- **Lotes**: Carga múltiple de archivos para procesamiento masivo
-- **Validación**: Verificación de formato y tamaño antes del envío
+### 📡 **Monitor en Tiempo Real**
+- **Stream de Video**: Visualización en vivo desde cámaras configuradas
+- **Detecciones Instantáneas**: Actualizaciones automáticas vía WebSocket
+- **Control de Cámaras**: Inicio/parada de monitoreo por cámara individual
+- **Panel de Estado**: Información en tiempo real del sistema y conexiones
 
-### 📊 **Historial y Consultas**
-- Tabla interactiva con resultados de detección
-- Filtros avanzados: fecha, número, tipo de detección, confianza
-- Exportación de datos en diferentes formatos
-- Paginación optimizada para grandes volúmenes
+### 📤 **Gestión de Archivos**
+- **Formatos Soportados**: JPG, PNG, WEBP, MP4, AVI, MOV
+- **Drag & Drop**: Interfaz intuitiva de arrastrar y soltar
+- **Procesamiento Lote**: Carga múltiple para eficiencia operativa
+- **Vista Previa**: Previsualización antes del procesamiento
+- **Validación Automática**: Verificación de formato y tamaño
 
-### 🗺️ **Trayectoria de Vagonetas**
-- Visualización cronológica del recorrido de cada vagoneta
-- Mapeo de puntos de detección con timestamps
-- Análisis de patrones de movimiento
-- Exportación de rutas específicas
+### 📋 **Historial Avanzado**
+- **Filtros Inteligentes**: Por fecha, número, evento, confianza y modelo
+- **Búsqueda Rápida**: Localización inmediata de registros específicos
+- **Ordenamiento Dinámico**: Por cualquier columna, ascendente/descendente
+- **Paginación Optimizada**: Navegación eficiente en grandes volúmenes
+- **Exportación CSV**: Descarga de datos filtrados para análisis externo
 
-### 📚 **Manual de Usuario Integrado**
-- **Sistema de Numeración**: Explicación completa de números calados vs enteros
-- **Guía de Operación**: Instrucciones paso a paso para usar el sistema
+### 📊 **Dashboard de Reportes**
+- **Estadísticas Diarias**: Resumen de actividad por día
+- **Análisis Mensual**: Tendencias y patrones a largo plazo
+- **Métricas de Confianza**: Análisis de precisión del modelo IA
+- **Gráficos Interactivos**: Visualización clara de datos históricos
+- **Reportes Personalizados**: Filtros específicos por período y criterios
+
+### 🗺️ **Análisis de Trayectorias**
+- **Seguimiento Individual**: Historial completo por número de vagoneta
+- **Ruta Cronológica**: Visualización temporal de movimientos
+- **Puntos de Detección**: Mapeo de ubicaciones y timestamps
+- **Patrones de Movimiento**: Análisis de comportamiento y rutas frecuentes
+- **Exportación de Rutas**: Datos específicos para análisis posterior
+
+### 📖 **Manual de Usuario Integrado**
+- **Guía Completa**: Documentación paso a paso del sistema
 - **Casos de Uso**: Ejemplos prácticos y mejores prácticas
 - **Troubleshooting**: Solución a problemas comunes
 - **FAQ**: Preguntas frecuentes con respuestas detalladas
-- **Especificaciones Técnicas**: Detalles del hardware y software
+- **Especificaciones**: Detalles técnicos del hardware y software
 
-## 📁 Estructura de Componentes
+### ⚙️ **Configuración del Sistema**
+- **Parámetros del Modelo**: Ajuste de confianza y umbrales de detección
+- **Configuración de Cámaras**: Gestión de dispositivos de captura
+- **Preferencias de Usuario**: Personalización de interfaz y notificaciones
+
+## � Flujo de Interacción del Usuario
+
+### 1. 🏠 **Acceso Principal**
+- Usuario ingresa al sistema y visualiza dashboard principal
+- Navegación intuitiva entre módulos desde la barra superior
+- Estado del sistema visible con indicadores de conexión
+
+### 2. 🎯 **Selección de Modo de Operación**
+
+#### **📡 Tiempo Real**
+1. Seleccionar cámara del sistema desde dropdown
+2. Iniciar monitoreo automático con botón de control
+3. Ver transmisión en vivo con overlay de detecciones
+4. Recibir notificaciones instantáneas de nuevas detecciones
+5. Monitorear panel de detecciones recientes en tiempo real
+
+#### **📤 Carga Manual**
+1. Acceder al módulo de subida de archivos
+2. Seleccionar o arrastrar imágenes/videos al área de carga
+3. Previsualizar archivos seleccionados antes del procesamiento
+4. Iniciar procesamiento con seguimiento de progreso
+5. Visualizar resultados inmediatos con metadatos completos
+
+### 3. 🔍 **Procesamiento y Análisis**
+- **Frontend**: Envía archivos al backend con indicadores de progreso
+- **Backend**: Procesa con modelo YOLOv8 y responde con resultados estructurados
+- **Visualización**: Presenta detecciones con confianza, coordenadas y metadatos
+- **Almacenamiento**: Guarda automáticamente en base de datos para consulta posterior
+
+### 4. 📊 **Consulta y Análisis Histórico**
+- **Filtrado Avanzado**: Por número, fecha, evento, confianza o modelo detectado
+- **Búsqueda Rápida**: Localización inmediata de registros específicos
+- **Exportación de Datos**: Descarga de resultados filtrados en formato CSV
+- **Análisis de Trayectorias**: Seguimiento temporal de vagonetas específicas
+
+### 5. 📈 **Reportes y Estadísticas**
+- **Dashboard Visual**: Gráficos de tendencias y patrones de detección
+- **Métricas de Sistema**: Análisis de rendimiento y precisión del modelo
+- **Reportes Personalizados**: Generación de informes por períodos específicos
+
+## � Requisitos del Sistema
+
+### **Navegador Web**
+- **Chrome 88+** (recomendado)
+- **Firefox 85+**
+- **Safari 14+**
+- **Edge 88+**
+
+### **Hardware Mínimo**
+- **RAM**: 4GB (recomendado 8GB para videos grandes)
+- **Procesador**: Dual-core moderno
+- **Almacenamiento**: 1GB libre para caché
+- **Conexión**: Banda ancha estable para WebSocket
+
+### **Resolución de Pantalla**
+- **Mínima**: 1024x768
+- **Recomendada**: 1920x1080 o superior
+- **Soporte Móvil**: 375px+ ancho
+
+## 🔧 Configuración Avanzada
+
+### **Variables de Entorno Adicionales**
+```env
+# Debug y desarrollo
+REACT_APP_DEBUG_MODE=true
+REACT_APP_LOG_LEVEL=info
+
+# Configuración de WebSocket
+REACT_APP_WS_RECONNECT_INTERVAL=5000
+REACT_APP_WS_MAX_RETRIES=10
+
+# Configuración de archivos
+REACT_APP_MAX_FILE_SIZE=100MB
+REACT_APP_ALLOWED_TYPES=image/*,video/*
+
+# UI personalización
+REACT_APP_THEME=light
+REACT_APP_PRIMARY_COLOR=#3b82f6
 ```
-src/
-├── App.js                    # Componente principal y enrutamiento
-├── App.css                   # Estilos globales y variables CSS
-├── index.js                  # Punto de entrada de React
-├── index.css                 # Estilos base con Tailwind
-├── components/
-│   ├── Navbar.js            # Navegación principal con menú responsive
-│   ├── Upload.js            # Carga de archivos con drag & drop
-│   ├── CameraCapture.js     # Control de cámaras en tiempo real
-│   ├── Historial.js         # Tabla de resultados con filtros
-│   ├── Trayectoria.js       # Visualización de rutas de vagonetas
-│   ├── ManualUsuario.js     # 🆕 Documentación educativa completa
-│   ├── RealTimeMonitor.js   # Monitor de detecciones en vivo
-│   ├── AutoCaptureControl.js # Control automático de captura
-│   ├── VideoPlayer.js       # Reproductor para videos procesados
-│   ├── VideoTrainingMonitor.js # Monitor para entrenamiento
-│   ├── GuiaUsuario.js       # Guía rápida de uso
-│   └── Spinner.js           # Componente de loading
-└── config/
-    └── api.js               # Configuración centralizada de API
+
+### **Personalización de Estilos**
+```css
+/* En src/index.css - Variables CSS personalizadas */
+:root {
+  --primary-color: #3b82f6;
+  --secondary-color: #64748b;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --background-color: #f8fafc;
+}
 ```
 
-## 🎨 Características de Diseño
-- **Responsive Design**: Adaptable a desktop, tablet y móvil
-- **Loading States**: Spinners y progress bars para mejor UX
-- **Error Handling**: Mensajes informativos para errores de red o procesamiento
-- **Drag & Drop**: Interfaz intuitiva para carga de archivos
+### **Configuración de Tailwind**
+```javascript
+// tailwind.config.js - Personalización del tema
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: '#eff6ff',
+          500: '#3b82f6',
+          900: '#1e3a8a',
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      }
+    }
+  }
+}
+```
 
-## ⚙️ Notas importantes
-- **Flujo Principal**: El sistema está optimizado para funcionar con cámaras físicas en tiempo real
-- **Modelos YOLO**: Requiere que el backend tenga los modelos entrenados en `backend/models/`
-- **Compatibilidad**: Funciona en navegadores modernos con soporte para ES6+
-- **Performance**: Optimizado para manejar múltiples detecciones simultáneas
-- **Seguridad**: Validación de archivos en cliente y servidor
+## 🛠️ Troubleshooting
 
-## 🎯 Personalización
-- **Estilos**: Modifica `src/App.css` y utiliza clases de Tailwind para cambios visuales
-- **Branding**: Reemplaza logo en `public/logo.jpg` y actualiza colores en `tailwind.config.js`
-- **API Endpoints**: Centraliza cambios en `src/config/api.js`
-- **Componentes**: Estructura modular permite agregar nuevas funcionalidades fácilmente
+### **Problemas Comunes**
 
-## 📋 Requisitos del Sistema
-- **Node.js**: Versión 16.0 o superior
-- **npm**: Versión 7.0 o superior (incluido con Node.js)
-- **Navegador**: Chrome 88+, Firefox 85+, Safari 14+, Edge 88+
-- **Backend**: Sistema backend corriendo en http://localhost:8000
-- **Memoria**: Mínimo 4GB RAM para procesamiento de videos
-- **Almacenamiento**: 1GB libre para caché y archivos temporales
+#### **1. Error de conexión con backend**
+```bash
+# Verificar que el backend esté ejecutándose
+curl http://localhost:8000/health
 
-## 🌐 URLs y Puertos
-- **Desarrollo**: http://localhost:3000 (servidor de desarrollo React)
-- **Backend API**: http://localhost:8000 (servidor FastAPI)
-- **Build de Producción**: Configurable según servidor web
+# Verificar variables de entorno
+echo $REACT_APP_API_URL
+```
+
+#### **2. WebSocket desconectado**
+- Verificar que el backend soporte WebSockets en `/ws/detections`
+- Comprobar firewall y configuración de proxy
+- Revisar console del navegador para errores específicos
+
+#### **3. Archivos no se procesan**
+- Verificar formato de archivo soportado
+- Comprobar tamaño del archivo (límite configurado)
+- Revisar permisos de la carpeta uploads en backend
+
+#### **4. Interfaz no responsiva**
+- Limpiar caché del navegador
+- Verificar que Tailwind CSS esté cargando correctamente
+- Comprobar compatibilidad del navegador
+
+### **Comandos de Diagnóstico**
+```bash
+# Verificar instalación de dependencias
+npm list --depth=0
+
+# Limpiar caché y reinstalar
+rm -rf node_modules package-lock.json
+npm install
+
+# Build con análisis de bundle
+npm run build -- --analyze
+
+# Verificar compatibilidad del navegador
+npx browserslist
+```
+
+## 🚀 Despliegue en Producción
+
+### **Build Optimizado**
+```bash
+# Crear build de producción
+npm run build
+
+# Analizar tamaño del bundle
+npm install -g serve
+serve -s build
+```
+
+### **Vercel (Recomendado)**
+```bash
+# Instalar Vercel CLI
+npm install -g vercel
+
+# Deploy directo
+vercel
+
+# Configurar dominio personalizado
+vercel --prod
+```
+
+### **Variables de Entorno para Producción**
+```env
+REACT_APP_API_URL=https://tu-backend-api.herokuapp.com
+REACT_APP_WS_URL=wss://tu-backend-api.herokuapp.com/ws/detections
+GENERATE_SOURCEMAP=false
+REACT_APP_DEBUG_MODE=false
+```
+
+### **Nginx Configuration**
+```nginx
+server {
+    listen 80;
+    server_name tu-dominio.com;
+    
+    location / {
+        root /var/www/build;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+    
+    location /api {
+        proxy_pass http://backend:8000;
+    }
+}
+```
+
+## 🎯 Optimización de Performance
+
+### **Mejores Prácticas**
+- **Lazy Loading**: Componentes cargados bajo demanda
+- **Memoización**: React.memo para componentes puros
+- **Bundle Splitting**: Separación de código por rutas
+- **Image Optimization**: Compresión automática de imágenes
+- **Cache Strategy**: Estrategia de caché para assets estáticos
+
+### **Métricas de Performance**
+- **First Contentful Paint**: < 1.5s
+- **Largest Contentful Paint**: < 2.5s
+- **Cumulative Layout Shift**: < 0.1
+- **Time to Interactive**: < 3.0s
+
+## 🤝 Desarrollo y Contribuciones
+
+### **Setup de Desarrollo**
+```bash
+# Instalar dependencias de desarrollo
+npm install --include=dev
+
+# Ejecutar linting
+npm run lint
+
+# Ejecutar tests
+npm test
+
+# Pre-commit hooks
+npm run pre-commit
+```
+
+### **Estructura de Commits**
+```
+feat: nueva funcionalidad para reportes avanzados
+fix: corrección en filtros del historial  
+docs: actualización de documentación
+style: mejoras de diseño en componentes
+refactor: optimización de componente Upload
+test: tests para componente RealTimeMonitor
+```
 
 ---
 
-## 🚀 Inicio Rápido
+## 📚 Recursos Adicionales
 
-Para comenzar a usar el sistema inmediatamente:
+- **React Documentation**: https://react.dev/
+- **Tailwind CSS**: https://tailwindcss.com/docs
+- **Axios Documentation**: https://axios-http.com/docs
+- **WebSocket API**: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
 
-1. **Asegúrate que el backend esté corriendo** en puerto 8000
-2. **Ejecuta el frontend** con `npm start`
-3. **Accede a http://localhost:3000**
-4. **Ve al Manual de Usuario** para aprender sobre números calados
-5. **Comienza con Carga de Archivos** para probar el sistema
-6. **Configura Cámaras** para uso en producción
+---
 
-El sistema incluye documentación completa integrada - ¡no necesitas leer manuales externos!
-
-## 🛠️ Tecnologías Usadas y Para Qué Sirve Cada Una
-- **React 18:** Framework principal para construir interfaces de usuario modernas y reactivas
-- **Axios:** Cliente HTTP para comunicación asíncrona con el backend y manejo de archivos
-- **Tailwind CSS:** Framework CSS utilitario para diseño responsivo y componentes estilizados
-- **React Hooks:** useState, useEffect, useCallback para manejo de estado y efectos
-- **JavaScript ES6+:** Sintaxis moderna con async/await, destructuring y módulos
-- **CSS Grid/Flexbox:** Layouts responsivos y adaptables a diferentes dispositivos
-- **File API:** Manejo nativo del navegador para carga y vista previa de archivos
-- **WebRTC (futuro):** Para integración directa con cámaras web del navegador
-
-## 🔄 Flujo de Interacción Completo
-1. **Acceso Principal**: Usuario ingresa al sistema y visualiza dashboard principal
-2. **Selección de Modo**:
-   - **Tiempo Real**: Conecta cámaras físicas para detección automática
-   - **Carga Manual**: Sube imágenes/videos para procesamiento bajo demanda
-3. **Procesamiento**:
-   - Frontend envía archivos al backend usando Axios con progress tracking
-   - Muestra spinner y progress bar durante procesamiento
+*🌐 Frontend desarrollado para el Sistema El Dorado - Detección de Números de Vagonetas*
+*📅 Última actualización: Julio 2025*
    - Backend responde con resultados de detección YOLO
 4. **Visualización**:
    - Presenta resultados con confianza, coordenadas y metadatos
