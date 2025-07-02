@@ -88,7 +88,7 @@ ElDorado/
 └── uploads/                     # 📁 Directorio global de archivos
     └── temp_chunks/             # 🗂️ Archivos temporales de subida
 
-## �️ Tecnologías Utilizadas
+##  Tecnologías Utilizadas
 
 ### Backend (Python + FastAPI)
 - **FastAPI 0.104+**: Framework web moderno y rápido para APIs
