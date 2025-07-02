@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone # MODIFIED: Added timezone
 from typing import Dict, List, Optional, Tuple, Any 
 from utils.image_processing import run_detection_on_frame # Updated import
+from utils.temporal_stabilizer import TemporalStabilizer, MotionStabilizer # ADDED
 from crud import create_vagoneta_record
 import os
 import json # MODIFIED: Ensured json is imported
@@ -132,6 +133,18 @@ class SmartCameraCapture:
             min_area=config.get('min_motion_area', 5000)
         )
 
+        # NEW: Temporal stabilizers for improved detection accuracy
+        self.temporal_stabilizer = TemporalStabilizer(
+            window_seconds=3.0,      # 3 second analysis window
+            min_detections=3,        # At least 3 detections to confirm
+            confidence_threshold=0.3, # Lowered to allow more inputs to the stabilizer
+            stability_threshold=0.6   # High stability required for confirmation
+        )
+        self.motion_stabilizer = MotionStabilizer(
+            movement_threshold=50.0,  # Max 50 pixels movement
+            stability_frames=5        # Need 5 stable frames
+        )
+
         self.detection_cooldown = config.get('detection_cooldown', 5)
         self.last_detection_time = 0
         self.pre_capture_buffer = []
@@ -224,9 +237,26 @@ class SmartCameraCapture:
             try:
                 camera_index = int(self.camera_url) # Assume URL is an index for local cameras
                 self.cap = cv2.VideoCapture(camera_index)
-                # Optional: Configure camera properties if needed
-                # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-                # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                
+                # Configure camera properties for better low-light performance
+                if self.cap.isOpened():
+                    # Set resolution (lower for better performance)
+                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    
+                    # Enable auto exposure and auto white balance
+                    self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Enable auto-exposure
+                    
+                    # Try to increase brightness and contrast
+                    self.cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.6)  # Increase brightness
+                    self.cap.set(cv2.CAP_PROP_CONTRAST, 0.6)    # Increase contrast
+                    self.cap.set(cv2.CAP_PROP_SATURATION, 0.5)  # Moderate saturation
+                    
+                    # Set FPS for stability
+                    self.cap.set(cv2.CAP_PROP_FPS, 30)
+                    
+                    print(f"📹 Cámara {self.camera_id} configurada para mejor rendimiento en poca luz")
+                    
             except ValueError:
                 print(f"Error: URL de cámara local inválida '{self.camera_url}' para {self.camera_id}. Debe ser un índice numérico.")
                 self.is_running = False
@@ -271,28 +301,72 @@ class SmartCameraCapture:
         
         best_detection_result = None
         best_frame_for_detection = None
-          # Analyze frames from buffer + current_frame
-        # Ensure buffer frames are used if available, otherwise just current_frame
+        
+        # Analyze frames from buffer + current_frame
         if self.pre_capture_buffer:
             frames_to_analyze = self.pre_capture_buffer + [current_frame]
         else:
             frames_to_analyze = [current_frame]
         
         for f_idx, test_frame in enumerate(frames_to_analyze):
-            # run_detection_on_frame expects a numpy array (frame)
-            # and returns a dict with detection results
             detection_data = run_detection_on_frame(test_frame)
             
             if detection_data and detection_data.get('numero_detectado'):
                 current_confidence = float(detection_data.get('confianza_numero', 0.0))
+                numero = str(detection_data.get('numero_detectado'))
+                modelo = detection_data.get('modelo_ladrillo')
+                bbox = detection_data.get('bbox_numero', (0, 0, 100, 100))
+                
+                # Check motion stability
+                is_motion_stable = self.motion_stabilizer.add_detection_box(bbox)
+                
+                # Add to temporal stabilizer (regardless of motion stability)
+                stable_detection = self.temporal_stabilizer.add_detection(
+                    numero=numero,
+                    modelo=modelo, 
+                    confidence=current_confidence,
+                    bbox=bbox
+                )
+                
+                # If we have a stable detection from the temporal filter
+                if stable_detection and is_motion_stable:
+                    # Use the stabilized detection data
+                    stabilized_result = {
+                        'numero_detectado': stable_detection['numero'],
+                        'modelo_ladrillo': stable_detection['modelo'],
+                        'confianza_numero': stable_detection['confidence'],
+                        'bbox_numero': bbox,
+                        'stability_info': {
+                            'detection_count': stable_detection['detection_count'],
+                            'stability_score': stable_detection['stability_score'],
+                            'temporal_span': stable_detection['temporal_span']
+                        }
+                    }
+                    
+                    print(f"✅ Detección estabilizada: N°{stable_detection['numero']}, "
+                          f"Conf: {stable_detection['confidence']:.3f}, "
+                          f"Estabilidad: {stable_detection['stability_score']:.3f}")
+                    
+                    self.last_detection_time = current_time
+                    self.stats['vagonetas_detectadas'] += 1
+                    await self._save_detection(stabilized_result, test_frame)
+                    return  # Exit early on confirmed stable detection
+                
+                # Keep track of best raw detection as fallback
                 if not best_detection_result or current_confidence > float(best_detection_result.get('confianza_numero', 0.0)):
                     best_detection_result = detection_data
-                    best_frame_for_detection = test_frame # Store the frame that yielded best detection
+                    best_frame_for_detection = test_frame
         
+        # If no stable detection was found, check if we should use best raw detection
         if best_detection_result and best_frame_for_detection is not None:
-            self.last_detection_time = current_time
-            self.stats['vagonetas_detectadas'] += 1
-            await self._save_detection(best_detection_result, best_frame_for_detection)
+            # Only use raw detection if confidence is very high
+            confidence = float(best_detection_result.get('confianza_numero', 0.0))
+            if confidence > 0.8:  # Very high confidence threshold for raw detections
+                self.last_detection_time = current_time
+                self.stats['vagonetas_detectadas'] += 1
+                await self._save_detection(best_detection_result, best_frame_for_detection)
+            else:
+                print(f"⚠️ Detección sin estabilizar (conf: {confidence:.3f}) - esperando estabilización")
         else:
             self.stats['false_positives'] += 1
             print(f"⚠️ Movimiento sin vagoneta identificable en {self.camera_id}")
