@@ -79,15 +79,43 @@ class ImageProcessor:
         self.min_confidence = 0.25  # Incrementado para reducir falsos positivos
         self.umbral_agrupacion = 50  # Valor por defecto para agrupación de números
 
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """Preprocesa la imagen para mejorar la detección"""
-        # Convertir a escala de grises
+    def preprocess_image(self, image: np.ndarray, enhance_low_light: bool = True) -> np.ndarray:
+        """Preprocesa la imagen para mejorar la detección, especialmente en condiciones de poca luz"""
+        if not enhance_low_light:
+            return image
+            
+        # Detectar si la imagen está muy oscura
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Mejorar contraste
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        enhanced = clahe.apply(gray)
-        # Volver a BGR para YOLO
-        return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+        mean_brightness = np.mean(gray)
+        
+        # Si la imagen está muy oscura (mean < 100), aplicar mejoras más agresivas
+        if mean_brightness < 100:
+            # 1. Mejora de contraste adaptativa (CLAHE)
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+            enhanced_gray = clahe.apply(gray)
+            
+            # 2. Corrección gamma para iluminar
+            gamma = 1.5 if mean_brightness < 50 else 1.2
+            gamma_corrected = np.power(enhanced_gray / 255.0, 1.0 / gamma) * 255.0
+            gamma_corrected = np.uint8(gamma_corrected)
+            
+            # 3. Filtro bilateral para reducir ruido manteniendo bordes
+            denoised = cv2.bilateralFilter(gamma_corrected, 9, 75, 75)
+            
+            # Convertir de vuelta a BGR
+            result = cv2.cvtColor(denoised, cv2.COLOR_GRAY2BGR)
+            
+        elif mean_brightness < 150:
+            # Mejora moderada para condiciones de luz media-baja
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            enhanced_gray = clahe.apply(gray)
+            result = cv2.cvtColor(enhanced_gray, cv2.COLOR_GRAY2BGR)
+            
+        else:
+            # Imagen con buena iluminación, procesamiento mínimo
+            result = image
+        
+        return result
 
     def detect_objects_unified(self, image: np.ndarray, umbral_agrupacion: int = 50) -> Dict[str, Any]:
         """

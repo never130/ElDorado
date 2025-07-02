@@ -6,9 +6,11 @@
         "evento": "ingreso",
         "tunel": "Túnel Principal",
         "roi": null,
-        "motion_sensitivity": 0.3,
-        "min_motion_area": 8000,
-        "detection_cooldown": 5,
-        "demo_mode": false
+        "motion_sensitivity": 0.25,
+        "min_motion_area": 6000,
+        "detection_cooldown": 2,
+        "demo_mode": false,
+        "enhance_low_light": true,
+        "confidence_threshold": 0.3
     }
 ]

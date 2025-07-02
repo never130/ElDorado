@@ -68,7 +68,9 @@ const RealTimeMonitorNew = () => {
               numero_detectado: message.data.numero_detectado || message.data.numero,
               numero: message.data.numero || message.data.numero_detectado,
               // Agregar timestamp si no existe
-              timestamp: message.data.timestamp || new Date().toISOString()
+              timestamp: message.data.timestamp || new Date().toISOString(),
+              // Información de estabilización si está disponible
+              stability_info: message.data.stability_info || null
             };
             setRecentDetections(prev => {
               // Evitar duplicados basados en ID
@@ -576,6 +578,30 @@ const RealTimeMonitorNew = () => {
                   {det.modelo_ladrillo && (
                     <div className="text-sm text-orange-700 font-medium mb-2 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
                       🧱 <span className="font-medium">Modelo:</span> {det.modelo_ladrillo}
+                    </div>
+                  )}
+                  
+                  {/* Información de estabilización para detecciones en vivo */}
+                  {det.origen_deteccion === 'live_camera' && det.stability_info && (
+                    <div className="text-xs bg-blue-50 border border-blue-200 px-2 py-1 rounded mb-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-blue-700">🎯 Estabilizada:</span>
+                        <span className="text-blue-600">
+                          {det.stability_info.detection_count} detecciones
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-blue-600">Score:</span>
+                        <span className={`font-bold ${
+                          det.stability_info.stability_score > 0.8 
+                            ? 'text-green-600' 
+                            : det.stability_info.stability_score > 0.6 
+                              ? 'text-yellow-600' 
+                              : 'text-red-600'
+                        }`}>
+                          {(det.stability_info.stability_score * 100).toFixed(0)}%
+                        </span>
+                      </div>
                     </div>
                   )}
                   
