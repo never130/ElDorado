@@ -88,6 +88,7 @@ ElDorado/
 └── uploads/                     # 📁 Directorio global de archivos
     └── temp_chunks/             # 🗂️ Archivos temporales de subida
 
+
 ##  Tecnologías Utilizadas
 
 ### Backend (Python + FastAPI)
@@ -350,16 +351,6 @@ npm run build
 - `GET /reports/monthly` - Reporte mensual
 - `GET /reports/statistics` - Estadísticas generales
 
-## 🛠️ Mantenimiento y Troubleshooting
-
-### Logs del Sistema
-```bash
-# Backend logs
-tail -f backend/logs/app.log
-
-# Frontend logs (en desarrollo)
-# Se muestran en la consola del navegador
-```
 
 ### Problemas Comunes
 
@@ -415,36 +406,6 @@ mongodump --uri="mongodb://localhost:27017/el_dorado" --out=./backup
 mongorestore --uri="mongodb://localhost:27017/el_dorado" ./backup/el_dorado
 ```
 
-## 📈 Monitoreo de Performance
-
-### Métricas Importantes
-- **Latencia de detección**: Tiempo promedio de procesamiento
-- **Precisión del modelo**: Porcentaje de detecciones correctas
-- **Uso de memoria**: RAM utilizada durante procesamiento
-- **Throughput**: Imágenes procesadas por segundo
-
-### Optimizaciones
-- Ajustar resolución de imagen para mejor performance
-- Configurar batch processing para múltiples imágenes
-- Usar GPU cuando esté disponible
-- Implementar cache para resultados frecuentes
-
-## 🔒 Seguridad
-
-### Recomendaciones
-- Cambiar credenciales por defecto de MongoDB
-- Usar HTTPS en producción
-- Implementar autenticación para API endpoints
-- Limitar tamaño de archivos subidos
-- Validar tipos de archivo permitidos
-
-### Variables de Entorno Sensibles
-```env
-# Nunca commitear estas variables al repositorio
-MONGO_CONNECTION_STRING=mongodb+srv://...
-JWT_SECRET_KEY=tu_clave_secreta_aqui
-API_KEY=tu_api_key_aqui
-```
 
 ## 🤝 Contribuciones
 
