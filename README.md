@@ -365,11 +365,11 @@ sudo systemctl restart mongod
 
 #### 2. Cámaras no detectadas
 ```bash
-# Verificar cámaras disponibles
-python backend/quick_camera_test.py
-
-# Verificar configuración
+# Verificar configuración de cámaras
 cat backend/cameras_config.json
+
+# Verificar endpoint de cámaras
+curl http://localhost:8000/cameras/list
 ```
 
 #### 3. Modelo YOLO no carga
@@ -390,11 +390,8 @@ curl http://localhost:8000/health
 # Verificar cámaras
 curl http://localhost:8000/cameras/list
 
-# Verificar base de datos
-python backend/check_db.py
-
-# Test completo del sistema
-python backend/test_system.py
+# Verificar conexión a base de datos
+python -c "from database import get_database; import asyncio; asyncio.run(get_database())"
 ```
 
 ### Backup de Base de Datos
