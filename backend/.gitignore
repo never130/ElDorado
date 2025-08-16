@@ -6,8 +6,8 @@ __pycache__/
 
 # Environment variables
 # Si usas un archivo .env para configuraciones del backend, descomenta la siguiente línea:
-# .env
-
+backend/.env
+.env
 # Carpetas de uploads temporales (si no deben estar en el repositorio)
 # Si la carpeta 'uploads/' o 'extracted_frames/' contiene solo archivos temporales
 # que no necesitas versionar, puedes descomentar las líneas correspondientes.
