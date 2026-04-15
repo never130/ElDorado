@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { FaFileCsv, FaRedo } from 'react-icons/fa';
+import { Download, RefreshCw, Search, Calendar, FilterX, Layers, Activity, AlertCircle, FileSpreadsheet, ChevronLeft, ChevronRight, BarChart3, Image as ImageIcon, X } from 'lucide-react';
 import Spinner from './Spinner';
 import { API_BASE_URL, assetUrl } from '../config/api';
 
@@ -200,8 +200,8 @@ const Historial = () => {
   };
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <Spinner size={40} />
+      <div className="flex justify-center items-center min-h-[400px] w-full">
+        <Spinner size={40} color="#ea580c" />
       </div>
     );
   }
@@ -210,13 +210,14 @@ const Historial = () => {
     return (
       <div className="flex justify-center items-center min-h-[400px]">
         <div className="text-center">
-          <p className="text-xl font-medium text-slate-900 mb-2">Error</p>
-          <p className="text-slate-600 mb-4">{error}</p>
+          <AlertCircle className="mx-auto h-12 w-12 text-red-500 mb-3" />
+          <p className="text-xl font-semibold text-slate-900 mb-2">Ha ocurrido un error</p>
+          <p className="text-slate-600 mb-6">{error}</p>
           <button 
             onClick={() => fetchHistorial(1, true)} 
-            className="inline-flex items-center px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+            className="btn-primary"
           >
-            <FaRedo className="mr-2 h-4 w-4" />
+            <RefreshCw className="mr-2 h-4 w-4" />
             Reintentar
           </button>
         </div>
@@ -224,54 +225,67 @@ const Historial = () => {
     );
   }
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-6">
+    <div className="card p-6 w-full max-w-7xl mx-auto">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-        <h2 className="text-2xl font-bold text-slate-900">📊 Historial de Detecciones</h2>
+        <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <FileSpreadsheet className="w-6 h-6 text-orange-600" /> Historial de Detecciones
+        </h2>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          <input
-            type="text"
-            placeholder="Buscar por número..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-          />
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar número..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="input-field pl-9"
+            />
+          </div>
           
-          <input
-            type="date"
-            placeholder="Fecha inicio"
-            value={fechaInicio}
-            onChange={(e) => setFechaInicio(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-          />
+          <div className="relative">
+            <Calendar className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <input
+              type="date"
+              placeholder="Fecha inicio"
+              value={fechaInicio}
+              onChange={(e) => setFechaInicio(e.target.value)}
+              className="input-field pl-9"
+            />
+          </div>
           
-          <input
-            type="date"
-            placeholder="Fecha fin"
-            value={fechaFin}
-            onChange={(e) => setFechaFin(e.target.value)}
-            className="px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-          />
+          <div className="relative">
+            <Calendar className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <input
+              type="date"
+              placeholder="Fecha fin"
+              value={fechaFin}
+              onChange={(e) => setFechaFin(e.target.value)}
+              className="input-field pl-9"
+            />
+          </div>
           
           <button 
             onClick={clearFilters}
-            className="px-3 py-2 bg-slate-600 text-white font-medium rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors whitespace-nowrap"
+            className="btn-secondary whitespace-nowrap"
           >
+            <FilterX className="w-4 h-4 mr-2" />
             Limpiar
           </button>
         </div>
       </div>
-        {/* Controles de agrupación */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+      
+      {/* Controles de agrupación */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
             id="agrupar"
             checked={agruparPorNumero}
             onChange={(e) => setAgruparPorNumero(e.target.checked)}
-            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded cursor-pointer"
           />
-          <label htmlFor="agrupar" className="text-sm font-medium text-slate-700">
+          <label htmlFor="agrupar" className="text-sm font-medium text-slate-700 cursor-pointer">
             Agrupar duplicados
           </label>
         </div>
@@ -285,7 +299,7 @@ const Historial = () => {
               id="maxPorNumero"
               value={maxPorNumero}
               onChange={(e) => setMaxPorNumero(parseInt(e.target.value))}
-              className="px-2 py-1 border border-slate-300 rounded-md text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              className="input-field py-1 text-sm"
             >
               <option value={1}>1</option>
               <option value={2}>2</option>
@@ -293,30 +307,35 @@ const Historial = () => {
             </select>
           </div>
         )}
-          <div className="text-xs text-slate-500">
+        
+        <div className="text-xs text-slate-500">
           {agruparPorNumero 
-            ? `📊 Vista optimizada: máximo ${maxPorNumero} registro(s) por número (evita duplicados, muestra los de mayor confianza)`
-            : "📄 Vista completa: todos los registros sin agrupación (puede mostrar múltiples detecciones del mismo número)"
+            ? <span className="flex items-center gap-1.5"><Layers className="w-3 h-3" /> Vista optimizada: máximo {maxPorNumero} registro(s) por número</span>
+            : <span className="flex items-center gap-1.5"><Layers className="w-3 h-3" /> Vista completa: todos los registros sin agrupación</span>
           }
         </div>
         
-        <div className="text-xs text-slate-400 mt-2 flex items-center gap-4">
-          <span>📝 Referencia túneles:</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-purple-100 border border-purple-200 rounded"></span>
+        <div className="text-xs text-slate-500 mt-2 sm:mt-0 sm:ml-auto flex items-center gap-3">
+          <span className="font-medium text-slate-600">Túneles:</span>
+          <span className="inline-flex items-center gap-1.5 bg-white px-2 py-1 rounded-md border border-slate-200">
+            <span className="inline-block w-2 h-2 bg-orange-400 rounded-full"></span>
             <span>1 = Proc. Imágenes</span>
           </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-3 h-3 bg-teal-100 border border-teal-200 rounded"></span>
+          <span className="inline-flex items-center gap-1.5 bg-white px-2 py-1 rounded-md border border-slate-200">
+            <span className="inline-block w-2 h-2 bg-emerald-400 rounded-full"></span>
             <span>2 = Monitor Vivo</span>
           </span>
         </div>
-      </div>      <div className="overflow-x-auto">
+      </div>      
+      
+      <div className="overflow-x-auto bg-white rounded-xl border border-slate-200">
         {sortedHistorial.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-slate-400 text-lg mb-2">📭</div>
-            <p className="text-slate-500 text-lg font-medium mb-2">No hay registros que mostrar</p>
-            <p className="text-slate-400 text-sm">
+          <div className="text-center py-16">
+            <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+              <Search className="w-8 h-8 text-slate-400" />
+            </div>
+            <p className="text-slate-900 text-lg font-semibold mb-1">No hay registros que mostrar</p>
+            <p className="text-slate-500 text-sm">
               {searchTerm || fechaInicio || fechaFin ? 
                 'Intenta ajustar los filtros de búsqueda' : 
                 'Aún no se han procesado imágenes o videos'
@@ -325,44 +344,44 @@ const Historial = () => {
             {(searchTerm || fechaInicio || fechaFin) && (
               <button 
                 onClick={clearFilters}
-                className="mt-4 px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                className="mt-6 btn-secondary"
               >
                 Limpiar filtros
               </button>
             )}
           </div>
         ) : (
-        <table className="min-w-full bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50">
             <tr>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('numero_detectado')}
               >
-                Numero Detectado {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                Numero {sortConfig.key === 'numero_detectado' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 Evento
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 Túnel
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 Modelo
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('confianza')}
               >
                 Confianza {sortConfig.key === 'confianza' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
+                className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors"
                 onClick={() => handleSort('timestamp')}
               >
                 Fecha {sortConfig.key === 'timestamp' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 Imagen
               </th>
             </tr>
@@ -371,37 +390,40 @@ const Historial = () => {
             {sortedHistorial.map((item, index) => (
               <tr key={item._id || index} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-lg font-bold text-orange-600">
+                  <span className="text-lg font-bold text-orange-700 bg-orange-50 px-3 py-1 rounded-lg border border-orange-100">
                     {item.numero_detectado || 'N/A'}
                   </span>
-                </td>                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                </td>                
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${
                     item.evento === 'ingreso' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-blue-100 text-blue-800'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                      : 'bg-blue-100 text-blue-800 border border-blue-200'
                   }`}>
                     {item.evento}
                   </span>
-                </td>                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                </td>                
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">                  
+                  <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${
                     getTunel(item) === '1'
-                      ? 'bg-purple-100 text-purple-800' 
-                      : 'bg-teal-100 text-teal-800'
+                      ? 'bg-orange-100 text-orange-800 border border-orange-200' 
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                   }`}>
-                    {getTunel(item)}
+                    Túnel {getTunel(item)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                  <span className={`inline-flex px-2.5 py-1 text-xs font-medium rounded-full ${
                     item.modelo_ladrillo && item.modelo_ladrillo !== 'None' && item.modelo_ladrillo !== 'null'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-slate-100 text-slate-600'
+                      ? 'bg-slate-100 text-slate-800 border border-slate-200'
+                      : 'bg-slate-50 text-slate-500 border border-slate-200'
                   }`}>
                     {item.modelo_ladrillo && item.modelo_ladrillo !== 'None' && item.modelo_ladrillo !== 'null' 
                       ? item.modelo_ladrillo 
                       : 'Sin clasificar'}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">
                   {item.confianza ? `${(item.confianza * 100).toFixed(1)}%` : 
                    item.confianza_numero ? `${(item.confianza_numero * 100).toFixed(1)}%` : 
                    item.confidence ? `${(item.confidence * 100).toFixed(1)}%` : 
@@ -410,7 +432,7 @@ const Historial = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                   {new Date(item.timestamp).toLocaleString('es-ES', {
                     year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    hour: '2-digit', minute: '2-digit'
                   })}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
@@ -419,26 +441,27 @@ const Historial = () => {
                       <img
                         src={assetUrl(item.imagen_path)}
                         alt={`Detección ${item.numero_detectado || 'N/A'}`}
-                        className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-slate-200"
+                        className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:ring-2 hover:ring-orange-500 hover:ring-offset-1 transition-all shadow-sm"
                         onClick={() => setSelectedImage(assetUrl(item.imagen_path))}
                         onError={(e) => {
-                          console.warn(`Error cargando imagen: ${item.imagen_path}`);
                           e.target.style.display = 'none';
                           const fallbackElement = e.target.nextSibling;
                           if (fallbackElement) {
-                            fallbackElement.style.display = 'inline-block';
+                            fallbackElement.style.display = 'flex';
                           }
                         }}
                       />
-                      <span
-                        className="text-slate-400 italic text-xs hidden"
+                      <div
+                        className="w-12 h-12 bg-slate-100 rounded-lg hidden items-center justify-center border border-slate-200"
                         style={{display: 'none'}}
                       >
-                        Imagen no disponible
-                      </span>
+                        <ImageIcon className="w-5 h-5 text-slate-400" />
+                      </div>
                     </div>
                   ) : (
-                    <span className="text-slate-400 italic text-xs">Sin imagen</span>
+                    <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
+                      <ImageIcon className="w-5 h-5 text-slate-300" />
+                    </div>
                   )}
                 </td>
               </tr>
@@ -451,51 +474,53 @@ const Historial = () => {
         <div className="flex items-center gap-4">
           <button 
             onClick={downloadCSV} 
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors shadow-sm"
           >
-            <FaFileCsv className="mr-2 h-4 w-4" />
+            <Download className="mr-2 h-4 w-4" />
             Descargar CSV
           </button>
         </div>
         
-        <div className="flex items-center gap-4">
-          <span className="text-slate-500 text-sm">
-            Página {currentPage} | Mostrando {sortedHistorial.length} de {totalRecords} registros
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <span className="text-slate-500 text-sm font-medium">
+            Página {currentPage} | Mostrando {sortedHistorial.length} de {totalRecords}
           </span>
           
           <div className="flex gap-2">
             <button 
               onClick={handlePreviousPage}
               disabled={currentPage === 1 || loading}
-              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-1"
+              className="btn-secondary px-3"
             >
-              {loading ? <Spinner size={12} /> : '←'} Anterior
+              {loading ? <Spinner size={16} color="#ea580c" /> : <ChevronLeft className="w-5 h-5" />}
             </button>
             
             <button 
               onClick={handleNextPage}
               disabled={!hasMore || loading}
-              className="px-3 py-1 bg-orange-600 text-white font-medium rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors flex items-center gap-1"
+              className="btn-secondary px-3"
             >
-              Siguiente {loading ? <Spinner size={12} /> : '→'}
+              {loading ? <Spinner size={16} color="#ea580c" /> : <ChevronRight className="w-5 h-5" />}
             </button>
           </div>
         </div>
-      </div>      {/* Modal para mostrar imagen ampliada */}
+      </div>      
+
+      {/* Modal para mostrar imagen ampliada */}
       {selectedImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={() => setSelectedImage(null)}>
-          <div className="relative max-w-4xl max-h-full p-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedImage(null)}>
+          <div className="relative max-w-5xl w-full flex justify-center animate-in fade-in zoom-in duration-200">
             <img 
               src={selectedImage} 
               alt="Imagen ampliada" 
-              className="max-w-full max-h-full object-contain rounded-lg"
+              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl border-4 border-white/10"
               onClick={(e) => e.stopPropagation()}
             />
             <button 
               onClick={() => setSelectedImage(null)}
-              className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+              className="absolute -top-4 -right-4 bg-white text-slate-900 rounded-full p-2 shadow-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>

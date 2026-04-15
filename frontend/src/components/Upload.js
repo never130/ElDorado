@@ -2,40 +2,43 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import Spinner from "./Spinner";
 import { API_BASE_URL } from "../config/api";
+import { UploadCloud, FileImage, FileVideo, CheckCircle2, XCircle, AlertTriangle, Info, Brain, Target, Activity, Check, RefreshCw, X } from "lucide-react";
 
 const Feedback = ({ status, message, details }) => {
   if (!status) return null;
   let color = "text-slate-700";
-  let icon = "ℹ️";
+  let Icon = Info;
   let bgColor = "bg-slate-50 border-slate-200";
   
   if (status === "success" || status === "ok") { 
     color = "text-green-700"; 
-    icon = "✅"; 
+    Icon = CheckCircle2; 
     bgColor = "bg-green-50 border-green-200";
   }
   if (status === "error") { 
     color = "text-red-700"; 
-    icon = "❌"; 
+    Icon = XCircle; 
     bgColor = "bg-red-50 border-red-200";
   }
   if (status === "warning" || status === "ignored") { 
     color = "text-amber-700"; 
-    icon = "⚠️"; 
+    Icon = AlertTriangle; 
     bgColor = "bg-amber-50 border-amber-200";
   }
   
   return (
-    <div className={`mt-6 p-4 rounded-lg border ${bgColor} ${color}`}>
-      <div className="flex items-center justify-center gap-2 font-medium">
-        <span>{icon}</span>
-        <span>{message}</span>
+    <div className={`mt-6 p-4 rounded-xl border ${bgColor} ${color}`}>
+      <div className="flex items-start gap-3 font-medium">
+        <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <span>{message}</span>
+          {details && (
+            <pre className="text-xs font-mono mt-3 p-3 bg-white/50 border border-slate-200/50 rounded-lg text-left overflow-x-auto max-h-60 text-slate-800 whitespace-pre-wrap">
+              {details}
+            </pre>
+          )}
+        </div>
       </div>
-      {details && (
-        <pre className="text-sm font-mono mt-3 p-3 bg-slate-100 border border-slate-200 rounded-md text-left overflow-x-auto max-h-60 text-slate-800">
-          {details}
-        </pre>
-      )}
     </div>
   );
 };
@@ -179,20 +182,20 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
       if (totalAttemptedFiles === 1 && finalResultsForFeedback.length >= 1) {
         const result = finalResultsForFeedback[0];
         if (result.status === "ok" || result.status === "completed") {
-          msg = `✅ ${result.filename}: Procesado.`;
+          msg = `${result.filename}: Procesado.`;
           if (result.numero_detectado) msg += ` Número: ${result.numero_detectado}`;
           if (typeof result.confianza === 'number') msg += ` (Confianza: ${(result.confianza * 100).toFixed(1)}%)`;
         } else if (result.status === "ignored") {
-          msg = `⚠️ ${result.filename}: ${result.message || 'Procesado, pero no se generó un resultado guardable.'}`;
+          msg = `${result.filename}: ${result.message || 'Procesado, pero no se generó un resultado guardable.'}`;
         } else if (result.status === "error") {
-          msg = `❌ ${result.filename}: Error - ${result.message || result.error || 'Error desconocido'}`;
+          msg = `${result.filename}: Error - ${result.message || result.error || 'Error desconocido'}`;
         } else {
-          msg = `ℹ️ ${result.filename}: ${result.message || 'Estado: ' + result.status}`;
+          msg = `${result.filename}: ${result.message || 'Estado: ' + result.status}`;
         }
       } else if (totalAttemptedFiles > 0) {
-        msg = `Procesamiento finalizado para ${totalAttemptedFiles} archivo(s). ✅ Detectados: ${okCount}`;
-        if (ignoredCount > 0) msg += `, ⚠️ Sin resultado guardado: ${ignoredCount}`;
-        if (errorCount > 0) msg += `, ❌ Con errores: ${errorCount}`;
+        msg = `Procesamiento finalizado para ${totalAttemptedFiles} archivo(s). Detectados: ${okCount}`;
+        if (ignoredCount > 0) msg += `, Sin resultado guardado: ${ignoredCount}`;
+        if (errorCount > 0) msg += `, Con errores: ${errorCount}`;
       } else {
         msg = "No hay archivos para mostrar feedback.";
       }
@@ -630,7 +633,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
     checkAllFilesProcessed(); // Re-check to update overall status
   };
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white rounded-lg border border-slate-200 p-8 mt-6 mb-8">
+    <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8 mt-6 mb-8">
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-slate-900 mb-2">
           Procesar Imágenes y Videos
@@ -639,20 +642,20 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
           Sube una o múltiples imágenes/videos para detectar automáticamente los números de las vagonetas.
         </p>
         {modelInfo && (
-          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-            <div className="text-sm text-slate-700">
-              🧠 <span className="font-medium">Modelo Activo:</span> {modelInfo.model_type} |
-              🎯 <span className="font-medium">{modelInfo.classes_count} clases detectables</span> |
-              📊 <span className="font-medium">Confianza:</span> {modelInfo.confidence_threshold}
-            </div>
+          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl inline-flex flex-wrap items-center justify-center gap-4 text-sm text-slate-700">
+            <span className="flex items-center gap-1.5"><Brain className="w-4 h-4 text-orange-600" /> <span className="font-medium">Modelo:</span> {modelInfo.model_type}</span>
+            <span className="text-slate-300">|</span>
+            <span className="flex items-center gap-1.5"><Target className="w-4 h-4 text-orange-600" /> <span className="font-medium">{modelInfo.classes_count} clases</span></span>
+            <span className="text-slate-300">|</span>
+            <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-orange-600" /> <span className="font-medium">Confianza:</span> {modelInfo.confidence_threshold}</span>
           </div>
         )}
-      </div>      <form onSubmit={handleUpload} className="space-y-6">
-        <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors duration-200">
-          <div className="mb-4">
-            <svg className="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+      </div>
+
+      <form onSubmit={handleUpload} className="space-y-6">
+        <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors duration-200 group">
+          <div className="mb-4 flex justify-center">
+            <UploadCloud className="h-12 w-12 text-slate-400 group-hover:text-orange-500 transition-colors" />
           </div>
           <input
             type="file"
@@ -664,10 +667,10 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
             disabled={loading}
           />
           <label htmlFor="file-upload" className={`cursor-pointer ${loading ? 'cursor-not-allowed' : ''}`}>
-            <span className="text-lg font-medium text-slate-700">
+            <span className="text-lg font-medium text-orange-600 hover:text-orange-700">
               {files.length > 0 ? 'Cambiar archivos seleccionados' : 'Haz clic para seleccionar archivos'}
             </span>
-            <p className="text-slate-500 mt-1">
+            <p className="text-slate-500 mt-2 text-sm">
               Soporta imágenes (JPG, PNG) y videos (MP4, AVI)
             </p>
           </label>
@@ -675,24 +678,24 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
 
         {/* Mostrar archivos seleccionados */}
         {files.length > 0 && !loading && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
             <div className="flex items-center mb-3">
-              <svg className="h-5 w-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 className="text-sm font-medium text-blue-800">
+              <CheckCircle2 className="h-5 w-5 text-orange-600 mr-2" />
+              <h3 className="text-sm font-medium text-orange-900">
                 {files.length} archivo{files.length > 1 ? 's' : ''} seleccionado{files.length > 1 ? 's' : ''}
               </h3>
             </div>
             <div className="space-y-2">
               {files.map((file, index) => (
-                <div key={index} className="flex items-center text-sm text-blue-700 bg-blue-100 rounded px-3 py-2">
-                  <span className="mr-2">
-                    {file.type.startsWith('video/') ? '🎥' : '🖼️'}
-                  </span>
-                  <span className="flex-1 truncate">{file.name}</span>
-                  <span className="text-xs text-blue-600 ml-2">
-                    ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+                <div key={index} className="flex items-center text-sm text-orange-800 bg-white rounded-lg px-3 py-2 border border-orange-100 shadow-sm">
+                  {file.type.startsWith('video/') ? (
+                    <FileVideo className="w-4 h-4 mr-2 text-orange-500" />
+                  ) : (
+                    <FileImage className="w-4 h-4 mr-2 text-orange-500" />
+                  )}
+                  <span className="flex-1 truncate font-medium">{file.name}</span>
+                  <span className="text-xs text-orange-500 ml-2">
+                    {(file.size / (1024 * 1024)).toFixed(2)} MB
                   </span>
                 </div>
               ))}
@@ -700,81 +703,64 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label htmlFor="evento" className="block text-sm font-medium text-slate-700 mb-2">Evento</label>
             <select 
               id="evento" 
               value={evento} 
               onChange={(e) => setEvento(e.target.value)} 
-              className="mt-1 block w-full p-3 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
+              className="input-field bg-white"
             >
               <option value="ingreso">Ingreso</option>
               <option value="salida">Salida</option>
               <option value="otro">Otro</option>
             </select>
           </div>
-          {/* Campos ocultos por petición del usuario */}
-          {/*
-          <div>
-            <label htmlFor="tunel" className="block text-sm font-medium text-gray-700">Túnel (Opcional)</label>
-            <input type="text" id="tunel" value={tunel} onChange={(e) => setTunel(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: Principal, Secundario" />
-          </div>
-          <div>
-            <label htmlFor="merma" className="block text-sm font-medium text-gray-700">Merma (Opcional)</label>
-            <input type="text" id="merma" value={merma} onChange={(e) => setMerma(e.target.value)} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ej: 10%" />
-          </div>
-          */}
-        </div>        <div className="flex flex-col sm:flex-row gap-3 pt-6">
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-6">
           <button
             type="submit"
             disabled={loading || files.length === 0}
-            className="w-full sm:w-auto flex-grow justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors duration-200 flex"
+            className="btn-primary flex-grow text-lg py-3"
           >
             {loading ? (
               <>
-                <Spinner size={20} />
+                <Spinner size={20} color="#ffffff" />
                 <span className="ml-2">
                   Procesando... {getOverallProgress()}%
                 </span>
               </>
-            ) : "📤 Iniciar Procesamiento"}
+            ) : (
+              <>
+                <UploadCloud className="w-5 h-5 mr-2" />
+                Iniciar Procesamiento
+              </>
+            )}
           </button>
+          
           {loading && (
             <button
               type="button"
               onClick={handleCancelUpload}
-              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-slate-300 text-base font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors duration-200 flex"
+              className="btn-secondary py-3 text-lg"
             >
-              🛑 Cancelar
+              <X className="w-5 h-5 mr-2" />
+              Cancelar
             </button>
           )}
-          {/* Mostrar botón para procesar nuevos archivos cuando el procesamiento esté completo */}
+          
           {!loading && Object.keys(fileProgress).length > 0 && (
             <button
               type="button"
               onClick={() => {
-                console.log("Reiniciando componente para nuevos archivos...");
-                
-                // Cerrar todas las conexiones activas
                 Object.values(activeEventSources).forEach(source => {
-                  try {
-                    source.close();
-                  } catch (e) {
-                    console.warn("Error cerrando EventSource:", e);
-                  }
+                  try { source.close(); } catch (e) {}
                 });
-                
-                // Cancelar el controlador de abort si existe
                 if (abortController) {
-                  try {
-                    abortController.abort();
-                  } catch (e) {
-                    console.warn("Error abortando controlador:", e);
-                  }
+                  try { abortController.abort(); } catch (e) {}
                 }
-                
-                // Limpiar todos los estados
                 setFiles([]);
                 setFileProgress({});
                 setFeedback(null);
@@ -782,32 +768,29 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
                 setActiveEventSources({});
                 setAbortController(null);
                 setLoading(false);
-                
-                console.log("Estado reiniciado completamente.");
               }}
-              className="w-full sm:w-auto justify-center items-center mt-3 sm:mt-0 px-6 py-3 border border-green-300 text-base font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 flex"
+              className="inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors text-lg"
             >
-              🔄 Procesar Nuevos Archivos
+              <RefreshCw className="w-5 h-5 mr-2" />
+              Procesar Nuevos Archivos
             </button>
           )}
         </div>
       </form>
 
       {feedback && (
-        <div className="mt-6">
-          <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
-        </div>
-      )}      {Object.keys(fileProgress).length > 0 && (
-        <div className="mt-6 bg-slate-50 border border-slate-200 rounded-lg p-6">
+        <Feedback status={feedback.status} message={feedback.message} details={feedback.details} />
+      )}
+
+      {Object.keys(fileProgress).length > 0 && (
+        <div className="mt-8 bg-slate-50 border border-slate-200 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200">
-            <h3 className="text-xl font-medium text-slate-800">
+            <h3 className="text-xl font-semibold text-slate-800">
               Detalle del Procesamiento
             </h3>
             {!loading && (
-              <div className="flex items-center text-green-600">
-                <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                </svg>
+              <div className="flex items-center text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">
+                <Check className="h-4 w-4 mr-1.5" />
                 <span className="text-sm font-medium">Procesamiento Completado</span>
               </div>
             )}
@@ -815,72 +798,75 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
           <div className="space-y-4">{Object.entries(fileProgress).map(([fileId, progress]) => {
               // eslint-disable-next-line no-unused-vars
               const originalFile = files.find(f => f.name === progress.name);
-              // const isVideo = originalFile?.type.startsWith('video/'); // Not currently used, but kept for potential future use
               const fileSizeMB = progress.total ? (progress.total / (1024 * 1024)).toFixed(2) : 'N/A';
-              const individualProgressPercent = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;              let statusIcon = '⏳';
+              const individualProgressPercent = progress.total > 0 ? Math.round((progress.loaded / progress.total) * 100) : 0;              
+              
+              let StatusIcon = Activity;
               let statusColor = 'text-slate-600';
-              let statusText = progress.status; // Default to the raw status
+              let statusText = progress.status;
 
               if (progress.status === 'completed') {
-                statusIcon = '✅';
+                StatusIcon = CheckCircle2;
                 statusColor = 'text-green-600';
                 statusText = 'Completado';
               } else if (progress.status === 'error') {
-                statusIcon = '❌';
+                StatusIcon = XCircle;
                 statusColor = 'text-red-600';
                 statusText = 'Error';
               } else if (progress.status === 'ignored') {
-                statusIcon = '⚠️';
+                StatusIcon = AlertTriangle;
                 statusColor = 'text-amber-600';
                 statusText = 'Ignorado';
               } else if (progress.status === 'uploading') {
-                statusIcon = '📤';
+                StatusIcon = UploadCloud;
                 statusColor = 'text-blue-600';
                 statusText = 'Subiendo';
               } else if (progress.status === 'finalizing') {
-                statusIcon = '⚙️';
+                StatusIcon = RefreshCw;
                 statusColor = 'text-blue-600';
                 statusText = 'Finalizando';
               } else if (progress.status === 'server_processing') {
-                statusIcon = '🧠';
+                StatusIcon = Brain;
                 statusColor = 'text-purple-600';
                 statusText = 'Procesando';
               } else if (progress.status === 'pending') {
-                statusIcon = '⏳';
+                StatusIcon = Activity;
                 statusColor = 'text-slate-500';
                 statusText = 'Pendiente';
               }
 
               return (
-                <div key={fileId} className="p-4 bg-white rounded-lg border border-slate-200">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-slate-700 truncate max-w-[calc(100%-120px)]" title={progress.name}>
-                      {progress.name} ({fileSizeMB} MB)
+                <div key={fileId} className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 transition-all">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="font-semibold text-slate-700 truncate max-w-[calc(100%-140px)]" title={progress.name}>
+                      {progress.name} <span className="text-slate-400 text-sm font-normal ml-1">({fileSizeMB} MB)</span>
                     </span>
-                    <span className={`font-medium ${statusColor} flex items-center text-sm whitespace-nowrap`}>
-                      {statusIcon} <span className="ml-1.5">{statusText}</span>
+                    <span className={`font-medium ${statusColor} flex items-center text-sm whitespace-nowrap bg-slate-50 px-2 py-1 rounded-md border border-slate-100`}>
+                      <StatusIcon className="w-4 h-4 mr-1.5" /> <span>{statusText}</span>
                     </span>
                   </div>
 
                   {(progress.status === 'uploading' || (progress.status === 'pending' && loading && files.map(f => f.name).includes(progress.name))) && progress.total > 0 && (
-                    <div className="w-full bg-slate-200 rounded-full h-2 mb-1">
+                    <div className="w-full bg-slate-100 rounded-full h-2 mb-1 overflow-hidden">
                       <div
                         className="bg-orange-500 h-2 rounded-full transition-all duration-150"
                         style={{ width: `${individualProgressPercent}%` }}
                       ></div>
                     </div>
-                  )}                  {progress.status === 'uploading' && progress.total > 0 && (
-                    <p className="text-xs text-slate-500 text-right">{individualProgressPercent}% subido</p>
+                  )}                  
+                  
+                  {progress.status === 'uploading' && progress.total > 0 && (
+                    <p className="text-xs text-slate-500 text-right mt-1">{individualProgressPercent}% subido</p>
                   )}
 
                   {/* Barra de progreso para procesamiento de video por frame */}
                   {progress.status === 'server_processing' && progress.frameProgress && (
-                    <div className="mt-2">
-                      <div className="flex justify-between text-xs text-purple-600 mb-1">
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs font-medium text-purple-600 mb-1.5">
                         <span>Procesando frames</span>
                         <span>{progress.frameProgress.current}/{progress.frameProgress.total} ({progress.frameProgress.percentage}%)</span>
                       </div>
-                      <div className="w-full bg-purple-200 rounded-full h-2">
+                      <div className="w-full bg-purple-100 rounded-full h-2 overflow-hidden">
                         <div
                           className="bg-purple-500 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${progress.frameProgress.percentage}%` }}
@@ -890,38 +876,49 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
                   )}
 
                   {progress.serverMessage && (
-                    <p className="text-xs text-slate-600 mt-2 bg-slate-50 border border-slate-200 p-2 rounded">
-                      {progress.serverMessage}
-                    </p>
+                    <div className="mt-3 bg-slate-50 border border-slate-100 p-3 rounded-lg flex items-start gap-2">
+                      <Info className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-slate-600">
+                        {progress.serverMessage}
+                      </p>
+                    </div>
                   )}
 
                   {progress.status === 'completed' && progress.result && (
-                    <div className="mt-2 text-xs p-2 bg-green-50 border border-green-200 rounded">
-                      {/* Si hay múltiples registros creados, mostrar un resumen */}
+                    <div className="mt-3 text-sm p-3 bg-green-50 border border-green-200 rounded-lg">
                       {progress.serverMessage && progress.serverMessage.includes('registro(s) creado(s)') ? (
-                        <p><strong>Procesamiento completado</strong> - Ver detalles arriba</p>
+                        <p className="text-green-800 font-medium">Procesamiento completado - Ver detalles arriba</p>
                       ) : (
-                        /* Si es un solo registro, mostrar detalles específicos */
-                        <>
+                        <div className="grid grid-cols-2 gap-2">
                           {(progress.result.numero || progress.result.numero_detectado) && (
-                            <p><strong>Número:</strong> {progress.result.numero || progress.result.numero_detectado}</p>
+                            <div className="bg-white p-2 rounded border border-green-100">
+                              <span className="text-green-600 text-xs font-semibold uppercase tracking-wider block">Número Detectado</span>
+                              <span className="font-bold text-green-800">{progress.result.numero || progress.result.numero_detectado}</span>
+                            </div>
                           )}
                           {progress.result.confianza && (
-                            <p><strong>Confianza:</strong> {(progress.result.confianza * 100).toFixed(1)}%</p>
+                            <div className="bg-white p-2 rounded border border-green-100">
+                              <span className="text-green-600 text-xs font-semibold uppercase tracking-wider block">Confianza</span>
+                              <span className="font-bold text-green-800">{(progress.result.confianza * 100).toFixed(1)}%</span>
+                            </div>
                           )}
-                        </>
+                        </div>
                       )}
-                      {progress.result.message && !progress.serverMessage?.includes(progress.result.message) && <p><strong>Msg:</strong> {progress.result.message}</p>}
+                      {progress.result.message && !progress.serverMessage?.includes(progress.result.message) && (
+                        <p className="mt-2 text-green-700 bg-white p-2 rounded border border-green-100 text-xs">{progress.result.message}</p>
+                      )}
                     </div>
                   )}
                   {progress.status === 'error' && progress.result && progress.result.message && (
-                    <div className="mt-2 text-xs p-2 bg-red-50 border border-red-200 rounded text-red-700">
+                    <div className="mt-3 text-sm p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-red-700">
+                      <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       <p><strong>Error:</strong> {progress.result.message}</p>
                     </div>
                   )}
                   {progress.status === 'ignored' && progress.result && progress.result.message && (
-                    <div className="mt-2 text-xs p-2 bg-amber-50 border border-amber-200 rounded text-amber-700">
-                      <p><strong>Info:</strong> {progress.result.message}</p>
+                    <div className="mt-3 text-sm p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-amber-700">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <p>{progress.result.message}</p>
                     </div>
                   )}
                 </div>

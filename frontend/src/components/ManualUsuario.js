@@ -1,160 +1,148 @@
 import React, { useState } from 'react';
+import { BookOpen, Rocket, ShieldCheck, HelpCircle, Lightbulb, ChevronRight, Play, Upload, History, Map, Database, Monitor, AlertTriangle, FileVideo, ShieldAlert, Cpu, Activity } from 'lucide-react';
 
 const ManualUsuario = () => {
   const [sectionOpen, setSectionOpen] = useState('como-usar');
   const sections = [
     {
       id: 'como-usar',
-      title: ' Cómo Usar el Sistema',
-      icon: '🚀',
+      title: 'Cómo Usar el Sistema',
+      icon: Rocket,
       content: (
-        <div className="space-y-6">
-          <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-400">
-            <h4 className="font-semibold text-blue-800 mb-3">📹 Captura en Tiempo Real</h4>
-            <div className="text-blue-700 text-sm space-y-2">
-              <div className="flex items-start">
-                <span className="text-blue-600 mr-2">1.</span>
-                <span>Ir a la sección <strong>"Monitor en Vivo"</strong></span>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <h4 className="font-bold text-orange-900 mb-4 flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-orange-600" /> Captura en Tiempo Real
+            </h4>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">1</span>
+                <span className="mt-0.5">Ir a la sección <strong>"Monitor en Vivo"</strong></span>
               </div>
-              <div className="flex items-start">
-                <span className="text-blue-600 mr-2">2.</span>
-                <span>Seleccionar una cámara conectada del menú desplegable</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">2</span>
+                <span className="mt-0.5">Seleccionar una cámara conectada del menú desplegable</span>
               </div>
-              <div className="flex items-start">
-                <span className="text-blue-600 mr-2">3.</span>
-                <span>Presionar <strong>"▶️ Iniciar Monitor"</strong></span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">3</span>
+                <span className="mt-0.5">Presionar <strong>"Iniciar Monitor"</strong></span>
               </div>
-              <div className="flex items-start">
-                <span className="text-blue-600 mr-2">4.</span>
-                <span>Ver las detecciones aparecer automáticamente en tiempo real</span>
-              </div>
-              <div className="flex items-start">
-                <span className="text-blue-600 mr-2">5.</span>
-                <span>Presionar <strong>"⏹️ Detener Monitor"</strong> cuando sea necesario</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">4</span>
+                <span className="mt-0.5">Ver las detecciones aparecer automáticamente en tiempo real</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
-            <h4 className="font-semibold text-green-800 mb-3">� Carga Manual de Archivos</h4>
-            <div className="text-green-700 text-sm space-y-2">
-              <div className="flex items-start">
-                <span className="text-green-600 mr-2">1.</span>
-                <span>Ir a <strong>"Carga Manual"</strong></span>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <h4 className="font-bold text-emerald-900 mb-4 flex items-center gap-2">
+              <Upload className="w-5 h-5 text-emerald-600" /> Carga Manual de Archivos
+            </h4>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">1</span>
+                <span className="mt-0.5">Ir a <strong>"Procesar Imágenes"</strong></span>
               </div>
-              <div className="flex items-start">
-                <span className="text-green-600 mr-2">2.</span>
-                <span>Seleccionar imágenes o videos desde tu computadora</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">2</span>
+                <span className="mt-0.5">Seleccionar imágenes o videos desde tu computadora</span>
               </div>
-              <div className="flex items-start">
-                <span className="text-green-600 mr-2">3.</span>
-                <span>Presionar <strong>"Procesar Archivos"</strong></span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">3</span>
+                <span className="mt-0.5">Presionar <strong>"Iniciar Procesamiento"</strong></span>
               </div>
-              <div className="flex items-start">
-                <span className="text-green-600 mr-2">4.</span>
-                <span>Ver los resultados de detección directamente en pantalla</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-400">
-            <h4 className="font-semibold text-purple-800 mb-3">� Historial de Detecciones</h4>
-            <div className="text-purple-700 text-sm space-y-2">
-              <div className="flex items-start">
-                <span className="text-purple-600 mr-2">1.</span>
-                <span>Ir a <strong>"Historial"</strong></span>
-              </div>
-              <div className="flex items-start">
-                <span className="text-purple-600 mr-2">2.</span>
-                <span>Ver tabla completa con todos los eventos detectados</span>
-              </div>
-              <div className="flex items-start">
-                <span className="text-purple-600 mr-2">3.</span>
-                <span>Aplicar filtros por fecha, número, cámara o tipo de evento</span>
-              </div>
-              <div className="flex items-start">
-                <span className="text-purple-600 mr-2">4.</span>
-                <span>Exportar los datos en formato CSV/Excel si es necesario</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold shrink-0">4</span>
+                <span className="mt-0.5">Ver los resultados de detección directamente en pantalla</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-orange-50 p-4 rounded-lg border-l-4 border-orange-400">
-            <h4 className="font-semibold text-orange-800 mb-3">🔄 Trayectoria de una Vagoneta</h4>
-            <div className="text-orange-700 text-sm space-y-2">
-              <div className="flex items-start">
-                <span className="text-orange-600 mr-2">1.</span>
-                <span>Ingresar a <strong>"Trayectoria"</strong></span>
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <h4 className="font-bold text-purple-900 mb-4 flex items-center gap-2">
+              <History className="w-5 h-5 text-purple-600" /> Historial de Detecciones
+            </h4>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold shrink-0">1</span>
+                <span className="mt-0.5">Ir a <strong>"Historial"</strong></span>
               </div>
-              <div className="flex items-start">
-                <span className="text-orange-600 mr-2">2.</span>
-                <span>Escribir el número de vagoneta que quieres rastrear</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold shrink-0">2</span>
+                <span className="mt-0.5">Ver tabla completa con todos los eventos detectados</span>
               </div>
-              <div className="flex items-start">
-                <span className="text-orange-600 mr-2">3.</span>
-                <span>Visualizar todas las detecciones en orden cronológico</span>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold shrink-0">3</span>
+                <span className="mt-0.5">Aplicar filtros por fecha o buscar por número</span>
               </div>
-              <div className="flex items-start">
-                <span className="text-orange-600 mr-2">4.</span>
-                <span>Descargar el reporte completo del recorrido si es necesario</span>
-              </div>            </div>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-100 text-purple-700 font-bold shrink-0">4</span>
+                <span className="mt-0.5">Exportar los datos en formato CSV si es necesario</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+            <h4 className="font-bold text-orange-900 mb-4 flex items-center gap-2">
+              <Map className="w-5 h-5 text-orange-600" /> Trayectoria de Vagoneta
+            </h4>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">1</span>
+                <span className="mt-0.5">Ingresar a <strong>"Trayectoria"</strong></span>
+              </div>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">2</span>
+                <span className="mt-0.5">Escribir el número de vagoneta que quieres rastrear</span>
+              </div>
+              <div className="flex items-start gap-3 text-sm text-slate-700">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold shrink-0">3</span>
+                <span className="mt-0.5">Visualizar todas las detecciones en orden cronológico</span>
+              </div>
+            </div>
           </div>
         </div>
       )
     },
     {
       id: 'buenas-practicas',
-      title: ' Buenas Prácticas',
-      icon: '✨',
+      title: 'Buenas Prácticas',
+      icon: ShieldCheck,
       content: (
-        <div className="space-y-4">
-          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
-            <h4 className="font-semibold text-indigo-800 mb-3">🏁 Antes de Comenzar</h4>
-            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
-              <li>Verificar que MongoDB esté activo y funcionando</li>
-              <li>Usar un navegador moderno y actualizado (Chrome, Firefox, Edge)</li>
-              <li>Confirmar que los archivos de configuración estén completos</li>
-              <li>Asegurarse de tener suficiente espacio en disco para videos</li>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+            <h4 className="font-bold text-orange-900 mb-3 flex items-center gap-2"><Database className="w-4 h-4" /> Antes de Comenzar</h4>
+            <ul className="list-none space-y-2 text-orange-800 text-sm">
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Verificar que MongoDB esté activo y funcionando</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Usar un navegador moderno y actualizado (Chrome, Edge)</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Confirmar que los archivos de configuración estén completos</li>
             </ul>
           </div>
 
-          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
-            <h4 className="font-semibold text-indigo-800 mb-3">⚡ Durante el Uso</h4>
-            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
-              <li>Mantener abiertas ambas consolas (backend y frontend)</li>
-              <li>No abrir múltiples instancias del sistema simultáneamente</li>
-              <li>Hacer pruebas con archivos pequeños antes de cargar datos reales</li>
-              <li>Monitorear el rendimiento del sistema durante uso intensivo</li>
+          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+            <h4 className="font-bold text-orange-900 mb-3 flex items-center gap-2"><Play className="w-4 h-4" /> Durante el Uso</h4>
+            <ul className="list-none space-y-2 text-orange-800 text-sm">
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Mantener abiertas ambas consolas (backend y frontend)</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> No abrir múltiples instancias del sistema simultáneamente</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Monitorear el rendimiento del sistema durante uso intensivo</li>
             </ul>
           </div>
 
-          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
-            <h4 className="font-semibold text-indigo-800 mb-3">📹 Con Cámaras</h4>
-            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
-              <li>Ubicarlas en zonas bien iluminadas y estables</li>
-              <li>No moverlas durante la ejecución del sistema</li>
-              <li>Verificar que estén correctamente definidas en cameras_config.json</li>
-              <li>Probar la conexión antes de iniciar monitoreo prolongado</li>
+          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+            <h4 className="font-bold text-orange-900 mb-3 flex items-center gap-2"><Monitor className="w-4 h-4" /> Con Cámaras</h4>
+            <ul className="list-none space-y-2 text-orange-800 text-sm">
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Ubicarlas en zonas bien iluminadas y estables</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> No moverlas durante la ejecución del sistema</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Verificar que estén definidas en cameras_config.json</li>
             </ul>
           </div>
 
-          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
-            <h4 className="font-semibold text-indigo-800 mb-3">📁 Con Archivos</h4>
-            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
-              <li>Usar imágenes o videos claros y en formatos válidos (JPG, PNG, MP4, AVI)</li>
-              <li>Evitar archivos muy pesados si tu computadora es lenta</li>
-              <li>Comprobar que se vean bien los números calados antes de procesar</li>
-              <li>Organizar archivos en carpetas por fecha o evento</li>
-            </ul>
-          </div>
-
-          <div className="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-400">
-            <h4 className="font-semibold text-indigo-800 mb-3">⚠️ Otras Sugerencias</h4>
-            <ul className="list-disc pl-5 text-indigo-700 text-sm space-y-1">
-              <li>No modificar el código sin saber lo que estás haciendo</li>
-              <li>Pedir asistencia técnica en caso de errores persistentes</li>
-              <li>Hacer respaldos regulares si vas a reinstalar o borrar carpetas</li>
-              <li>Documentar cualquier configuración personalizada que hagas</li>
+          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+            <h4 className="font-bold text-orange-900 mb-3 flex items-center gap-2"><FileVideo className="w-4 h-4" /> Con Archivos</h4>
+            <ul className="list-none space-y-2 text-orange-800 text-sm">
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Usar formatos válidos (JPG, PNG, MP4, AVI)</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Comprobar que se vean bien los números antes de procesar</li>
+              <li className="flex items-start gap-2"><ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" /> Organizar archivos en carpetas por fecha o evento</li>
             </ul>
           </div>
         </div>
@@ -162,209 +150,143 @@ const ManualUsuario = () => {
     },
     {
       id: 'faq',
-      title: ' Preguntas Frecuentes',
-      icon: '❓',
+      title: 'Preguntas Frecuentes',
+      icon: HelpCircle,
       content: (
         <div className="space-y-4">
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">🗄️ ¿Qué pasa si no tengo MongoDB instalado?</h4>
-            <p className="text-red-700 text-sm">
-              No podrás ejecutar el sistema correctamente. MongoDB es necesario para almacenar 
-              los datos de detecciones. Instálalo siguiendo las instrucciones de configuración inicial.
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+              <Database className="w-4 h-4 text-rose-500" /> ¿Qué pasa si no tengo MongoDB instalado?
+            </h4>
+            <p className="text-slate-600 text-sm pl-6">
+              No podrás ejecutar el sistema correctamente. MongoDB es necesario para almacenar los datos de detecciones. Instálalo siguiendo las instrucciones de configuración inicial.
             </p>
           </div>
 
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">📷 ¿Puedo usar el sistema sin cámara?</h4>
-            <p className="text-red-700 text-sm">
-              ¡Sí! Puedes usar perfectamente la opción de <strong>"Carga Manual"</strong> para 
-              procesar imágenes y videos desde tu computadora sin necesidad de cámaras en tiempo real.
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+              <Monitor className="w-4 h-4 text-rose-500" /> ¿Puedo usar el sistema sin cámara?
+            </h4>
+            <p className="text-slate-600 text-sm pl-6">
+              ¡Sí! Puedes usar perfectamente la opción de <strong>"Procesar Imágenes"</strong> para procesar imágenes y videos desde tu computadora sin necesidad de cámaras en tiempo real.
             </p>
           </div>
 
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">📁 ¿Qué tipos de archivos acepta?</h4>
-            <div className="text-red-700 text-sm">
-              <p className="mb-2"><strong>Imágenes:</strong> .jpg, .png, .webp</p>
-              <p><strong>Videos:</strong> .mp4, .avi, .mov</p>
-            </div>
-          </div>
-
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">🔍 No detecta nada, ¿qué hago?</h4>
-            <ul className="list-disc pl-5 text-red-700 text-sm space-y-1">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-rose-500" /> No detecta nada, ¿qué hago?
+            </h4>
+            <ul className="list-disc pl-11 text-slate-600 text-sm space-y-1">
               <li>Asegúrate de que el modelo YOLO esté en la carpeta backend/models/</li>
-              <li>Verifica que no haya errores al iniciar el backend</li>
               <li>Usa imágenes más nítidas y bien iluminadas</li>
               <li>Verifica que los números calados sean claramente visibles</li>
             </ul>
           </div>
 
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">📹 Tengo una cámara conectada pero no aparece</h4>
-            <ul className="list-disc pl-5 text-red-700 text-sm space-y-1">
-              <li>Revisa que no esté siendo usada por otra aplicación</li>
-              <li>Verifica su configuración en el archivo cameras_config.json</li>
-              <li>Reinicia la computadora si el sistema no la detecta</li>
-              <li>Prueba desconectar y volver a conectar la cámara USB</li>
-            </ul>
-          </div>
-
-          <div className="bg-red-50 p-4 rounded-lg border-l-4 border-red-400">
-            <h4 className="font-semibold text-red-800 mb-2">⚠️ Aparece un error en consola</h4>
-            <div className="text-red-700 text-sm">
-              <p className="mb-2">Para resolver errores:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Lee el mensaje completo del error</li>
-                <li>Busca palabras clave como "missing", "permission" o "not found"</li>
-                <li>Verifica que todos los servicios estén ejecutándose</li>
-                <li>Consulta este manual o contacta soporte técnico</li>
-              </ul>
-            </div>
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-500" /> Aparece un error en consola
+            </h4>
+            <p className="text-slate-600 text-sm pl-6">
+              Lee el mensaje completo del error. Busca palabras clave como "missing", "permission" o "not found". Verifica que todos los servicios estén ejecutándose y consulta con soporte técnico si persiste.
+            </p>
           </div>
         </div>
       )
     },
     {
       id: 'conceptos',
-      title: ' Conceptos Importantes',
-      icon: '💡',
+      title: 'Conceptos Importantes',
+      icon: Lightbulb,
       content: (
-        <div className="space-y-4">
-          <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
-            <h4 className="font-semibold text-yellow-800 mb-2">🔢 Números Calados</h4>
-            <p className="text-yellow-700 text-sm">
-              Son los identificadores únicos de cada vagoneta, recortados físicamente en la estructura
-              metálica. El sistema está entrenado específicamente para reconocer estos números.
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm">
+            <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-amber-200 flex items-center justify-center text-amber-800">12</div>
+              Números Calados
+            </h4>
+            <p className="text-amber-800 text-sm leading-relaxed">
+              Son los identificadores únicos de cada vagoneta, recortados físicamente en la estructura metálica. El sistema está entrenado específicamente para reconocer estos números.
             </p>
           </div>
 
-          <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
-            <h4 className="font-semibold text-yellow-800 mb-2">📊 Confianza de Detección</h4>
-            <p className="text-yellow-700 text-sm">
-              Cada detección tiene un valor de confianza entre 0 y 1 que indica qué tan seguro está el
-              sistema de haber identificado correctamente el número. Valores cercanos a 1 indican alta
-              confianza.
+          <div className="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm">
+            <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-amber-700" />
+              Confianza de Detección
+            </h4>
+            <p className="text-amber-800 text-sm leading-relaxed">
+              Cada detección tiene un valor de confianza entre 0 y 1 que indica qué tan seguro está el sistema de haber identificado correctamente el número. Valores cercanos a 1 indican alta confianza.
             </p>
           </div>
-
-          <div className="bg-yellow-50 p-4 rounded-lg border-l-4 border-yellow-400">
-            <h4 className="font-semibold text-yellow-800 mb-2">🕰️ Trayectoria y Eventos</h4>
-            <p className="text-yellow-700 text-sm">
-              El sistema registra automáticamente cada vez que una vagoneta es detectada, creando un
-              historial de eventos que permite rastrear su movimiento a través de diferentes túneles.
-            </p>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 'requisitos',
-      title: ' Requisitos del Sistema',
-      icon: '⚙️',
-      content: (
-        <div className="space-y-4">
-          <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
-            <h4 className="font-semibold text-gray-800 mb-2">🖥️ Hardware Recomendado</h4>
-            <ul className="list-disc pl-5 text-gray-700 text-sm space-y-1">
-              <li>Procesador: Intel Core i5 o superior</li>
-              <li>Memoria RAM: 8GB mínimo, 16GB recomendado</li>
-              <li>Almacenamiento: 100GB de espacio libre para videos y base de datos</li>
-              <li>Tarjeta gráfica: Compatible con CUDA para procesamiento acelerado (opcional)</li>
-            </ul>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
-            <h4 className="font-semibold text-gray-800 mb-2">📡 Conectividad</h4>
-            <ul className="list-disc pl-5 text-gray-700 text-sm space-y-1">
-              <li>Conexión a red local para acceder al sistema desde múltiples dispositivos</li>
-              <li>Conexión a cámaras IP para monitoreo en tiempo real</li>
-              <li>Acceso a MongoDB para almacenamiento de datos</li>
-            </ul>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-lg border-l-4 border-gray-400">
-            <h4 className="font-semibold text-gray-800 mb-2">📱 Compatibilidad</h4>
-            <ul className="list-disc pl-5 text-gray-700 text-sm space-y-1">
-              <li>Navegadores: Chrome, Firefox, Edge (últimas versiones)</li>
-              <li>Formatos de video soportados: MP4, AVI, MOV</li>
-              <li>Formatos de imagen soportados: JPG, PNG</li>
-            </ul>
-          </div>
-        </div>
-      )
-    },
-    {
-      id: 'tips',
-      title: ' Consejos y Solución de Problemas',
-      icon: '🔍',
-      content: (
-        <div className="space-y-4">
-          <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
-            <h4 className="font-semibold text-green-800 mb-2">📸 Mejores Prácticas para Captura</h4>
-            <ul className="list-disc pl-5 text-green-700 text-sm space-y-1">
-              <li>Asegúrate de que el número calado esté bien iluminado</li>
-              <li>Mantén la cámara lo más estable posible</li>
-              <li>Evita ángulos extremos que distorsionen los números</li>
-              <li>Para monitoreo en vivo, coloca la cámara en un ángulo donde los números sean claramente visibles</li>
-            </ul>
-          </div>
-
-          <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
-            <h4 className="font-semibold text-green-800 mb-2">⚠️ Solución de Problemas</h4>
-            <ul className="list-disc pl-5 text-green-700 text-sm space-y-1">
-              <li><strong>No se detectan números:</strong> Verifica la iluminación y el ángulo de captura</li>
-              <li><strong>Detecciones incorrectas:</strong> Ajusta los parámetros de confianza en la configuración</li>
-              <li><strong>Cámara no funciona:</strong> Asegúrate de que no esté siendo usada por otra aplicación</li>
-              <li><strong>Sistema lento:</strong> Reduce la resolución de video o actualiza el hardware</li>
-            </ul>
-          </div>
-
-          <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
-            <h4 className="font-semibold text-green-800 mb-2">💾 Respaldo de Datos</h4>
-            <p className="text-green-700 text-sm">
-              Recomendamos realizar copias de seguridad periódicas de la base de datos MongoDB para
-              evitar pérdida de información histórica. Las imágenes y videos procesados también
-              deberían respaldarse regularmente.
+          
+          <div className="bg-amber-50 p-6 rounded-xl border border-amber-200 shadow-sm md:col-span-2">
+            <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+              Merma y Modelo de Ladrillo
+            </h4>
+            <p className="text-amber-800 text-sm leading-relaxed">
+              El sistema también puede detectar el tipo de ladrillo cargado y estimar si existe una merma significativa en la carga de la vagoneta.
             </p>
           </div>
         </div>
       )
     }
   ];
+
   return (
-    <div className="w-full max-w-6xl mx-auto p-4">
-      <h1 className="text-3xl font-bold text-slate-900 mb-6">📚 Manual de Usuario</h1>
-      
-      <div className="grid md:grid-cols-4 gap-6">
-        <div className="md:col-span-1">
-          <div className="bg-white border border-slate-200 rounded-lg">
-            <div className="p-4">
-              <h2 className="text-lg font-medium text-slate-700 mb-4">Secciones</h2>
-              <nav className="space-y-2">
-                {sections.map(section => (
+    <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 min-h-screen">
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold text-slate-900 mb-3 flex items-center justify-center gap-3">
+          <BookOpen className="w-8 h-8 text-orange-600" /> Manual de Usuario
+        </h1>
+        <p className="text-slate-600 text-lg max-w-2xl mx-auto">
+          Guía completa para el uso del sistema de seguimiento de vagonetas y detección automática mediante IA.
+        </p>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-8">
+        <div className="md:w-1/3 flex-shrink-0">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden sticky top-24">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 uppercase tracking-wider text-sm">
+              Contenido
+            </div>
+            <nav className="p-2 flex flex-col gap-1">
+              {sections.map((section) => {
+                const Icon = section.icon;
+                const isActive = sectionOpen === section.id;
+                return (
                   <button
                     key={section.id}
                     onClick={() => setSectionOpen(section.id)}
-                    className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                      sectionOpen === section.id
-                        ? 'bg-orange-100 text-orange-700 font-medium'
-                        : 'hover:bg-slate-100 text-slate-700'
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                      isActive 
+                        ? 'bg-orange-50 text-orange-700 font-bold' 
+                        : 'text-slate-600 hover:bg-slate-50 font-medium'
                     }`}
                   >
-                    <span className="mr-2">{section.icon}</span>
+                    <Icon className={`w-5 h-5 ${isActive ? 'text-orange-600' : 'text-slate-400'}`} />
                     {section.title}
                   </button>
-                ))}
-              </nav>
-            </div>
+                );
+              })}
+            </nav>
           </div>
         </div>
-        
-        <div className="md:col-span-3">
-          <div className="bg-white border border-slate-200 rounded-lg p-6">
-            {sections.find(s => s.id === sectionOpen)?.content}
-          </div>
+
+        <div className="md:w-2/3">
+          {sections.map((section) => (
+            <div 
+              key={section.id} 
+              className={sectionOpen === section.id ? 'block animate-in fade-in slide-in-from-right-4 duration-300' : 'hidden'}
+            >
+              <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3 pb-4 border-b border-slate-200">
+                <section.icon className="w-7 h-7 text-orange-600" />
+                {section.title}
+              </h2>
+              {section.content}
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { Activity, Video, StopCircle, PlayCircle, Clock, CheckCircle2, XCircle, Search, RefreshCw, AlertCircle, Info, Database, Camera } from 'lucide-react';
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 
 const RealTimeMonitorNew = () => {
@@ -332,20 +333,24 @@ const RealTimeMonitorNew = () => {
     }
   };
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 bg-slate-50 min-h-screen">
+    <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 min-h-screen">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-slate-900">📊 Monitor en Tiempo Real</h1>
+        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+          <Activity className="w-8 h-8 text-orange-600" /> Monitor en Tiempo Real
+        </h1>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-bold text-slate-900 mb-4">🎥 Control de Cámaras</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 items-end">
-          <div className="col-span-2 md:col-span-1">
+      <div className="card p-6 mb-6">
+        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <Video className="w-5 h-5 text-orange-600" /> Control de Cámaras
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+          <div className="col-span-1 md:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-2">Seleccionar Cámara</label>
             <select 
               value={selectedCamera} 
               onChange={(e) => setSelectedCamera(e.target.value)} 
-              className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors" 
+              className="input-field" 
               disabled={isMonitoring || isLoadingData}
             >
               <option value="">{isLoadingData ? "Cargando..." : "-- Seleccione --"}</option>
@@ -357,20 +362,21 @@ const RealTimeMonitorNew = () => {
             <button 
               onClick={isMonitoring ? stopMonitoring : startMonitoring} 
               disabled={!selectedCamera || isLoadingData} 
-              className={`w-full px-4 py-2 rounded-md font-medium transition-all duration-200 transform ${
+              className={`w-full inline-flex items-center justify-center px-4 py-2.5 rounded-lg font-medium transition-all duration-200 transform ${
                 !selectedCamera || isLoadingData 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed' 
                   : isMonitoring 
-                    ? 'bg-red-500 text-white hover:bg-red-600 hover:scale-105 shadow-lg' 
-                    : 'bg-green-500 text-white hover:bg-green-600 hover:scale-105 shadow-lg'
-              } ${isMonitoring ? 'animate-pulse' : ''}`}
+                    ? 'bg-red-600 text-white hover:bg-red-700 shadow-md' 
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
+              }`}
             >
-              {isLoadingData 
-                ? '⏳ Cargando...' 
-                : isMonitoring 
-                  ? '⏹️ Detener' 
-                  : '▶️ Iniciar'
-              }
+              {isLoadingData ? (
+                <><RefreshCw className="w-5 h-5 mr-2 animate-spin" /> Cargando...</>
+              ) : isMonitoring ? (
+                <><StopCircle className="w-5 h-5 mr-2" /> Detener</>
+              ) : (
+                <><PlayCircle className="w-5 h-5 mr-2" /> Iniciar</>
+              )}
             </button>
           </div>
           {/* Botones ocultos por petición del usuario */}
@@ -389,126 +395,127 @@ const RealTimeMonitorNew = () => {
           </div>
           */}
           <div className="text-center">
-            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm transition-all duration-200 ${
+            <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 ${
               isMonitoring 
-                ? 'bg-green-100 text-green-800 border border-green-300' 
-                : 'bg-gray-100 text-gray-500 border border-gray-300'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                : 'bg-slate-100 text-slate-600 border border-slate-200'
             }`}>
               <div className={`w-2 h-2 rounded-full mr-2 ${
                 isMonitoring 
-                  ? 'bg-green-500 animate-pulse' 
-                  : 'bg-gray-400'
+                  ? 'bg-emerald-500 animate-pulse' 
+                  : 'bg-slate-400'
               }`}></div>
               {isMonitoring ? 'Monitoreando' : 'Detenido'}
             </div>
-            {isConnected && (
-              <div className="text-xs text-green-600 mt-1 flex items-center justify-center">
-                <div className="w-1 h-1 bg-green-500 rounded-full mr-1 animate-pulse"></div>
+            {isConnected ? (
+              <div className="text-xs text-emerald-600 mt-2 flex items-center justify-center font-medium">
+                <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse"></div>
                 WebSocket conectado
               </div>
-            )}
-            {!isConnected && (
-              <div className="text-xs text-red-600 mt-1 flex items-center justify-center">
-                <div className="w-1 h-1 bg-red-500 rounded-full mr-1"></div>
+            ) : (
+              <div className="text-xs text-red-600 mt-2 flex items-center justify-center font-medium">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"></div>
                 WebSocket desconectado
               </div>
             )}
           </div>
           <div className="text-center">
-            <div className="text-sm text-gray-600">
-              <div className="font-semibold text-cyan-700">Detecciones: {recentDetections.length}</div>
+            <div className="text-sm text-slate-600">
+              <div className="font-semibold text-orange-700 text-lg">Detec: {recentDetections.length}</div>
               <div className="text-xs">Últimas en vivo</div>
             </div>
           </div>
         </div>
-        {monitorError && <div className="mt-4 p-3 bg-red-100 text-red-800 rounded-md"><strong>Error:</strong> {monitorError}</div>}
+        {monitorError && <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span><strong>Error:</strong> {monitorError}</span>
+        </div>}
           {/* Información adicional cuando está monitoreando */}
         {isMonitoring && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-green-800">
-                <h4 className="font-semibold mb-1">✅ Monitor Activo - Detección Automática</h4>
-                <p className="text-xs">
-                  🤖 El sistema está analizando el video en tiempo real usando IA para detectar números de vagonetas y modelos de ladrillos.
-                  Las detecciones se guardan automáticamente en el historial con la misma información que las detecciones manuales.
+          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg flex items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="text-sm text-emerald-800">
+                <h4 className="font-semibold mb-1">Monitor Activo - Detección Automática</h4>
+                <p className="text-xs opacity-90">
+                  El sistema está analizando el video en tiempo real usando IA para detectar números de vagonetas y modelos de ladrillos.
+                  Las detecciones se guardan automáticamente en el historial.
                 </p>
               </div>
-              <div className="text-green-600 flex flex-col items-center">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse mb-1"></div>
-                <span className="text-xs">Cámara: {selectedCamera}</span>
-              </div>
+            </div>
+            <div className="text-emerald-700 flex items-center gap-2 bg-white px-3 py-1.5 rounded-md border border-emerald-100 shadow-sm text-sm font-medium">
+              <Camera className="w-4 h-4" /> {selectedCamera}
             </div>
           </div>
         )}
       </div>      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-slate-800 mb-4">📹 Visualización de Cámara en Vivo</h3>
-            <div className="bg-black aspect-video rounded-md flex items-center justify-center text-white relative">
+        <div className="xl:col-span-2 flex flex-col gap-6">
+          <div className="card p-4 flex-1">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Video className="w-5 h-5 text-orange-600" /> Transmisión en Vivo
+            </h3>
+            <div className="bg-slate-900 aspect-video rounded-xl flex items-center justify-center text-white relative overflow-hidden shadow-inner">
                 {selectedCamera ? (
                     <div className="w-full h-full relative">
                         <img 
                             src={`${API_BASE_URL}/video/stream/${selectedCamera}?t=${Date.now()}`} 
                             alt="Transmisión en vivo"
-                            className="w-full h-full object-cover rounded-md"
+                            className="w-full h-full object-cover"
                             onError={(e) => {
                                 console.error("Error al cargar el stream de video");
                                 setMonitorError("No se pudo cargar la transmisión de video. Inicie el monitoreo para activar la cámara.");
                             }}
                             onLoad={() => {
-                                // Limpiar errores cuando la imagen se carga correctamente
                                 setMonitorError('');
                             }}
                         />
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent text-white text-xs p-3">
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent text-white p-4 pt-12">
                             <div className="flex justify-between items-center">
-                                <span>📹 {selectedCamera} | {isMonitoring ? '🔴 EN VIVO' : '⚪ VISTA PREVIA'}</span>
-                                <span>{new Date().toLocaleTimeString()}</span>
+                                <span className="flex items-center gap-2 font-medium text-sm">
+                                  <Camera className="w-4 h-4" /> {selectedCamera} 
+                                  <span className="opacity-50">|</span> 
+                                  {isMonitoring ? <span className="text-red-400">EN VIVO</span> : <span className="text-slate-300">VISTA PREVIA</span>}
+                                </span>
+                                <span className="text-sm font-mono opacity-80 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {new Date().toLocaleTimeString()}</span>
                             </div>
                         </div>
                         {isMonitoring && (
-                            <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded text-xs font-bold animate-pulse">
-                                🔴 GRABANDO
+                            <div className="absolute top-4 right-4 bg-red-600/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-md text-xs font-bold animate-pulse flex items-center gap-2 shadow-lg">
+                                <div className="w-2 h-2 bg-white rounded-full"></div> GRABANDO
                             </div>
                         )}
                     </div>
                 ) : (
-                    <div className="text-center p-8">
-                        <div className="text-6xl mb-4">📹</div>
-                        <p className="text-slate-400 mb-2 text-lg">Ninguna cámara seleccionada</p>
-                        <p className="text-slate-500 text-sm">Seleccione una cámara e inicie el monitoreo para ver la transmisión en vivo con detección automática</p>
+                    <div className="text-center p-8 flex flex-col items-center">
+                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                          <Camera className="w-8 h-8 text-slate-500" />
+                        </div>
+                        <p className="text-slate-300 mb-2 text-lg font-medium">Ninguna cámara seleccionada</p>
+                        <p className="text-slate-500 text-sm max-w-sm">Seleccione una cámara e inicie el monitoreo para ver la transmisión en vivo con detección automática</p>
                     </div>
                 )}
             </div>
-            {monitorError && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-md">
-                    <strong>⚠️ Problema con la cámara:</strong> {monitorError}
-                </div>
-            )}
             
             {/* Panel de información de detección activa */}
             {isMonitoring && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h4 className="font-medium text-blue-800 mb-1">🤖 Detección Automática Activa</h4>
-                            <p className="text-sm text-blue-600">
-                                El sistema está analizando el video en tiempo real para detectar números de vagonetas y modelos de ladrillos.
-                                Las detecciones se guardan automáticamente en el historial.
-                            </p>
-                        </div>
-                        <div className="text-blue-600">
-                            <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                        </div>
+                <div className="mt-4 p-4 bg-orange-50 border border-orange-100 rounded-xl flex items-start gap-3">
+                    <Activity className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <h4 className="font-semibold text-orange-900 mb-1">Detección Automática Activa</h4>
+                        <p className="text-sm text-orange-700 opacity-90">
+                            El sistema está analizando el video en tiempo real para detectar números de vagonetas y modelos de ladrillos.
+                        </p>
                     </div>
                 </div>
             )}
+          </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-slate-800 flex items-center">
-              📋 Detecciones Recientes
-              <span className="ml-2 text-sm font-normal text-slate-500">({recentDetections.length}/15)</span>
+        <div className="card p-4 flex flex-col h-[calc(100vh-200px)] min-h-[600px]">
+          <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100">
+            <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <Database className="w-5 h-5 text-orange-600" /> Recientes
+              <span className="bg-slate-100 text-slate-600 text-xs py-0.5 px-2 rounded-full font-medium ml-1">{recentDetections.length}/15</span>
             </h3>
             <div className="flex gap-2">
               <button 
@@ -532,119 +539,112 @@ const RealTimeMonitorNew = () => {
                     reconnectAttempts.current = 0;
                     connectWebSocket();
                   }}
-                  className="text-sm px-2 py-1 bg-blue-500 text-white font-medium rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-md transition-colors"
                   title="Reconectar WebSocket"
                 >
-                  🔌 Reconectar
+                  <RefreshCw className="w-4 h-4" />
                 </button>
               )}
             </div>
-          </div>          <div className="space-y-3 h-[600px] overflow-y-auto border border-slate-200 rounded-md p-2">
+          </div>
+          
+          <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
             {recentDetections.length > 0 ? recentDetections.map((det, index) => (
-                <div key={`det-${det.id || det._id || index}-${det.timestamp || Date.now()}-${index}`} className={`p-3 rounded-md border transition-all hover:shadow-sm ${
+                <div key={`det-${det.id || det._id || index}-${det.timestamp || Date.now()}-${index}`} className={`p-4 rounded-xl border transition-all ${
                   det.origen_deteccion === 'live_camera' 
-                    ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    ? 'bg-emerald-50/50 border-emerald-100' 
+                    : 'bg-white border-slate-200 shadow-sm'
                 }`}>
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="font-bold text-slate-900 text-lg">
-                      N°: {det.numero_detectado || det.numero || 'N/A'}
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Número</span>
+                      <span className="font-bold text-slate-900 text-2xl leading-none">
+                        {det.numero_detectado || det.numero || 'N/A'}
+                      </span>
                     </div>
-                    <div className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    <div className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 border ${
                       det.origen_deteccion === 'live_camera' 
-                        ? 'bg-green-200 text-green-800' 
-                        : 'bg-orange-100 text-orange-700'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200' 
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
                     }`}>
-                      {det.origen_deteccion === 'live_camera' ? '📹 En vivo' : '📋 Historial'}
+                      {det.origen_deteccion === 'live_camera' ? <Video className="w-3 h-3" /> : <Database className="w-3 h-3" />}
+                      {det.origen_deteccion === 'live_camera' ? 'En vivo' : 'Historial'}
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-                    <div className="text-slate-600">
-                      <span className="font-medium text-slate-700">Confianza:</span>
-                      <span className="ml-1 font-bold text-green-600">
+                  <div className="grid grid-cols-2 gap-3 mb-3 bg-white p-2.5 rounded-lg border border-slate-100">
+                    <div>
+                      <span className="block text-xs text-slate-500 mb-0.5">Confianza</span>
+                      <span className="font-semibold text-emerald-600">
                         {(det.confianza * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div className="text-slate-600">
-                      <span className="font-medium text-slate-700">Evento:</span>
-                      <span className="ml-1 font-medium text-blue-600">
+                    <div>
+                      <span className="block text-xs text-slate-500 mb-0.5">Evento</span>
+                      <span className="font-semibold text-orange-600 capitalize">
                         {det.evento || 'N/A'}
                       </span>
                     </div>
                   </div>
                   
                   {det.modelo_ladrillo && (
-                    <div className="text-sm text-orange-700 font-medium mb-2 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                      🧱 <span className="font-medium">Modelo:</span> {det.modelo_ladrillo}
+                    <div className="text-sm text-slate-700 font-medium mb-3 bg-slate-50 border border-slate-100 px-3 py-2 rounded-lg flex items-center gap-2">
+                      <div className="w-4 h-4 bg-orange-200 rounded border border-orange-300"></div>
+                      <span className="opacity-70">Modelo:</span> {det.modelo_ladrillo}
                     </div>
                   )}
                   
-                  <div className="text-xs text-slate-500 mb-2 flex items-center">
-                    <span className="mr-2">🕒</span>
-                    {new Date(det.timestamp).toLocaleString()}
-                  </div>
-                  
-                  {det.imagen_path && (
-                    <div className="mt-2">
-                      <img 
-                        src={`${API_BASE_URL}/${det.imagen_path}`}
-                        alt={`Detección ${det.id}`}
-                        className="w-full h-20 object-cover rounded border border-slate-200 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105"
+                  <div className="flex justify-between items-end mt-2">
+                    <div className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      {new Date(det.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}
+                    </div>
+                    {det.imagen_path && (
+                      <button
                         onClick={() => window.open(`${API_BASE_URL}/${det.imagen_path}`, '_blank')}
-                        title="Click para ver imagen completa"
-                      />
-                      <div className="text-xs text-slate-400 mt-1 text-center">
-                        📸 Click para ampliar
-                      </div>
-                    </div>
-                  )}
+                        className="text-xs text-orange-600 font-medium hover:text-orange-800 flex items-center gap-1"
+                      >
+                        Ver imagen
+                      </button>
+                    )}
+                  </div>
                 </div>
               )) : (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🔍</div>
-                  <p className="text-lg text-slate-500 mb-2">Esperando detecciones...</p>
-                  <p className="text-sm text-slate-400 mb-4">
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 opacity-60">
+                  <Search className="w-12 h-12 text-slate-400 mb-4" />
+                  <p className="text-lg font-medium text-slate-700 mb-1">Esperando detecciones</p>
+                  <p className="text-sm text-slate-500">
                     {isMonitoring 
-                      ? 'El monitoreo está activo. Las detecciones aparecerán aquí en tiempo real.' 
-                      : 'Inicia el monitoreo para ver detecciones en tiempo real.'}
+                      ? 'El monitoreo está activo. Las detecciones aparecerán aquí.' 
+                      : 'Inicia el monitoreo para ver detecciones.'}
                   </p>
-                  {!isMonitoring && (
-                    <div className="text-xs text-slate-400 bg-slate-100 p-2 rounded">
-                      💡 <strong>Tip:</strong> Selecciona una cámara y presiona "▶️ Iniciar" para comenzar
-                    </div>
-                  )}
                 </div>
               )
             }
           </div>
-            {/* Panel de estadísticas rápidas */}
+          
+          {/* Panel de estadísticas rápidas */}
           {recentDetections.length > 0 && (
-            <div className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-md">
-              <h4 className="font-medium text-slate-800 mb-2">📊 Resumen Rápido</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-slate-600">Total detecciones:</span>
-                  <span className="ml-1 font-bold text-blue-600">{recentDetections.length}</span>
-                </div>
-                <div>
-                  <span className="text-slate-600">En vivo:</span>
-                  <span className="ml-1 font-bold text-green-600">
-                    {recentDetections.filter(d => d.origen_deteccion === 'live_camera').length}
-                  </span>
-                </div>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex justify-between text-xs font-medium px-1">
+                <span className="text-slate-500">Total: <span className="text-slate-900">{recentDetections.length}</span></span>
+                <span className="text-slate-500">En vivo: <span className="text-emerald-600">{recentDetections.filter(d => d.origen_deteccion === 'live_camera').length}</span></span>
               </div>
             </div>
           )}
         </div>
-      </div>      {debugInfo && (
-        <div className="bg-white border border-slate-200 rounded-lg p-6 mt-6">
-          <h2 className="text-xl font-medium text-slate-800 mb-4">🔍 Info de Debug (Backend)</h2>
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded grid md:grid-cols-2 gap-4">
-              <p><strong>Cámara:</strong> {debugInfo.camera_id}</p>
-              <p><strong>FPS:</strong> {debugInfo.fps}</p>
-              <p><strong>Resolución:</strong> {debugInfo.resolution}</p>
-              <p><strong>Última Actualización:</strong> {new Date(debugInfo.timestamp).toLocaleTimeString()}</p>
+      </div>
+
+      {debugInfo && (
+        <div className="card p-6 mt-6">
+          <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <Info className="w-5 h-5 text-orange-600" /> Info de Debug (Backend)
+          </h2>
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg grid md:grid-cols-4 gap-4 text-sm">
+              <div><strong className="block text-slate-500 mb-1">Cámara</strong> <span className="font-medium">{debugInfo.camera_id}</span></div>
+              <div><strong className="block text-slate-500 mb-1">FPS</strong> <span className="font-medium text-emerald-600">{debugInfo.fps}</span></div>
+              <div><strong className="block text-slate-500 mb-1">Resolución</strong> <span className="font-medium font-mono">{debugInfo.resolution}</span></div>
+              <div><strong className="block text-slate-500 mb-1">Actualización</strong> <span className="font-medium font-mono">{new Date(debugInfo.timestamp).toLocaleTimeString()}</span></div>
           </div>
         </div>
       )}
