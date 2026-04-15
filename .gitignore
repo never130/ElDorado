@@ -1,7 +1,32 @@
+# Entornos virtuales y dependencias
 /.venv
+venv/
+**/__pycache__/
+*.pyc
 /node_modules
+frontend/node_modules/
+frontend/build/
+
+# Variables de entorno con secretos (NUNCA commitear)
+.env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
+# Uploads y datos generados en runtime
+backend/uploads/
+uploads/
 
+# Logs
+*.log
 
-
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { API_BASE_URL, WS_BASE_URL } from '../config/api';
 
 const RealTimeMonitorNew = () => {
-  // API Base URL configuration
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   
   const [recentDetections, setRecentDetections] = useState([]);
   const [availableCameras, setAvailableCameras] = useState([]);
@@ -33,7 +32,7 @@ const RealTimeMonitorNew = () => {
     }
     
     try {      console.log('🔌 Intentando conectar WebSocket...');
-      const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws/detections';
+      const wsUrl = WS_BASE_URL;
       console.log('🔌 Conectando a:', wsUrl);
       ws.current = new WebSocket(wsUrl);
       

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import Spinner from "./Spinner";
+import { API_BASE_URL } from "../config/api";
 
 const Feedback = ({ status, message, details }) => {
   if (!status) return null;
@@ -56,7 +57,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
     // Cargar información del modelo
     const fetchModelInfo = async () => {
       try {
-        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/model/info`);
+        const response = await axios.get(`${API_BASE_URL}/model/info`);
         setModelInfo(response.data);
       } catch (error) {
         console.error('Error loading model info:', error);
@@ -212,7 +213,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
   }, [files, fileProgress, activeEventSources, allFilesResults]);
 
   const setupEventSource = useCallback((fileId, processingId, filename) => {
-    const eventSource = new EventSource(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/stream-video-processing/${processingId}`);
+    const eventSource = new EventSource(`${API_BASE_URL}/stream-video-processing/${processingId}`);
     setActiveEventSources(prev => ({ ...prev, [fileId]: eventSource }));
 
     eventSource.onopen = () => {
@@ -490,7 +491,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
 
         try {
           await axios.post(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/upload-chunk/`,
+            `${API_BASE_URL}/upload-chunk/`,
             chunkFormData,
             { 
               signal: newAbortController.signal,              // eslint-disable-next-line no-loop-func
@@ -539,7 +540,7 @@ const Upload = () => {  const [files, setFiles] = useState([]);  const [feedback
 
         try {
           const res = await axios.post(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/finalize-upload/`,
+            `${API_BASE_URL}/finalize-upload/`,
             finalizeFormData,
             { signal: newAbortController.signal }
           );

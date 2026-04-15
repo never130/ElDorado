@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { FaFileCsv, FaRedo } from 'react-icons/fa';
 import Spinner from './Spinner';
+import { API_BASE_URL, assetUrl } from '../config/api';
 
 const Historial = () => {
   const [historial, setHistorial] = useState([]);
@@ -38,7 +39,7 @@ const Historial = () => {
     
     try {
       const skip = (page - 1) * recordsPerPage;
-      let url = `http://localhost:8000/historial/?skip=${skip}&limit=${recordsPerPage}`;
+      let url = `${API_BASE_URL}/historial/?skip=${skip}&limit=${recordsPerPage}`;
       
       // Agregar filtros de fecha si están definidos
       const params = new URLSearchParams();
@@ -415,11 +416,11 @@ const Historial = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
                   {item.imagen_path ? (
                     <div className="flex items-center gap-2">
-                      <img 
-                        src={`http://localhost:8000/${item.imagen_path}`}
+                      <img
+                        src={assetUrl(item.imagen_path)}
                         alt={`Detección ${item.numero_detectado || 'N/A'}`}
                         className="w-12 h-12 object-cover rounded-md cursor-pointer hover:opacity-75 transition-opacity border border-slate-200"
-                        onClick={() => setSelectedImage(`http://localhost:8000/${item.imagen_path}`)}
+                        onClick={() => setSelectedImage(assetUrl(item.imagen_path))}
                         onError={(e) => {
                           console.warn(`Error cargando imagen: ${item.imagen_path}`);
                           e.target.style.display = 'none';

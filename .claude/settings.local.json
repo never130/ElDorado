@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l \"c:/VSCode/MisProyectos/app_imagenes/backend/main.py\" \"c:/VSCode/MisProyectos/app_imagenes/backend/crud.py\" \"c:/VSCode/MisProyectos/app_imagenes/backend/database.py\" \"c:/VSCode/MisProyectos/app_imagenes/backend/schemas.py\" \"c:/VSCode/MisProyectos/app_imagenes/backend/utils/\"*.py)",
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\Program Files\\\\\\\\|TESSERACT_PATH\\\\|os.path\" /c/VSCode/MisProyectos/app_imagenes/backend/utils/ocr.py)",
+      "Bash(wc -l /c/VSCode/MisProyectos/app_imagenes/backend/utils/*.py)",
+      "Bash(grep -r \"os.path\\\\|Path\\\\|\\\\\\\\/\" /c/VSCode/MisProyectos/app_imagenes/backend/main.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")"
+    ]
+  }
+}

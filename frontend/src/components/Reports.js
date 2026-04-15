@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL as API_BASE } from '../config/api';
 
 const Reports = () => {
   const [selectedReport, setSelectedReport] = useState('daily');
@@ -7,8 +8,6 @@ const Reports = () => {
   const [error, setError] = useState(null);
   const [dateFilter, setDateFilter] = useState('');
   const [daysBack, setDaysBack] = useState(7);
-
-  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
   const reportTypes = [
     { id: 'daily', name: 'Reporte Diario', icon: '📊', description: 'Actividad diaria con métricas y distribución horaria' },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 const LiveStreamPlayer = ({ cameraId, isActive = false }) => {
     const [error, setError] = useState(null);
@@ -12,7 +13,7 @@ const LiveStreamPlayer = ({ cameraId, isActive = false }) => {
         setIsLoading(true);
         setError(null);
         
-        const url = `http://127.0.0.1:8000/video/stream/${cameraId}`;
+        const url = `${API_BASE_URL}/video/stream/${cameraId}`;
         setStreamUrl(url);
         
         // Configurar manejo de errores de imagen

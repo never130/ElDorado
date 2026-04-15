@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 const VideoPlayer = ({ cameraId = 'video_demo_calados', isPlaying = false }) => {
     const [videoInfo, setVideoInfo] = useState(null);
@@ -29,7 +30,7 @@ const VideoPlayer = ({ cameraId = 'video_demo_calados', isPlaying = false }) => 
         return () => stopFrameUpdates();
     }, [isPlaying, cameraId]);    const fetchVideoInfo = async () => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/video/info/${cameraId}`);
+            const response = await fetch(`${API_BASE_URL}/video/info/${cameraId}`);
             const data = await response.json();
             
             if (data.status === 'success') {
@@ -46,7 +47,7 @@ const VideoPlayer = ({ cameraId = 'video_demo_calados', isPlaying = false }) => 
         }
     };    const fetchCurrentFrame = async () => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/video/frame/${cameraId}`);
+            const response = await fetch(`${API_BASE_URL}/video/frame/${cameraId}`);
             const data = await response.json();
             
             if (data.status === 'success') {

@@ -1,5 +1,16 @@
-// Configuración centralizada del backend
-export const API_BASE_URL = 'http://127.0.0.1:8000';
+// Configuración centralizada del backend.
+// Override vía REACT_APP_API_URL / REACT_APP_WS_URL en .env del frontend.
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+export const WS_BASE_URL =
+  process.env.REACT_APP_WS_URL ||
+  API_BASE_URL.replace(/^http/, 'ws') + '/ws/detections';
+
+// Ayuda a construir URLs a archivos subidos (imagen_path devuelto por el backend).
+export const assetUrl = (path) => {
+  if (!path) return '';
+  const clean = String(path).replace(/^\/+/, '');
+  return `${API_BASE_URL}/${clean}`;
+};
 
 // Helpers para construir URLs de API
 export const apiUrl = (endpoint) => `${API_BASE_URL}${endpoint}`;

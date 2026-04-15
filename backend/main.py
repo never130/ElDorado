@@ -2,13 +2,14 @@
 # Autor: [Tu nombre o equipo]
 # Descripción: API REST para subir, procesar y consultar registros de vagonetas usando visión computacional.
 
-import asyncio 
+import asyncio
 import shutil
 import os
 import uuid
 import json
+import base64
 import traceback
-import cv2 
+import cv2
 import time
 import numpy as np
 
@@ -37,8 +38,8 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 current_processing_tasks = {}  # Para almacenar tareas en progreso
 video_processing_tasks = {}  # Para el procesamiento de videos
 CAMERAS_CONFIG = []  # Lista de configuraciones de cámaras
-monitor_tasks = {}  # Para las tareas de monitoreo activas
-live_frames = {}  # Para almacenar los frames de las cámaras en vivo
+monitor_tasks: Dict[str, Any] = {}  # Tareas de monitoreo activas
+live_frames: Dict[str, Any] = {}  # Frames de cámaras en vivo
 
 class ConnectionManager:
     def __init__(self):
@@ -190,16 +191,7 @@ async def procesar_video_mp4_streamable(video_path: str, upload_dir: Path):
     if not detections:
         yield {"type": "final_result", "stage": "completion", "data": None, "message": "No se detectaron números en el video."}
     else:
-        # Convertir a formato que mantenga todas las detecciones
-        final_detections_serializable = {}
-        for numero, lista_detecciones in detections.items():
-            final_detections_serializable[numero] = lista_detecciones
-        
-        print(f"🔍 DEBUG - FINAL RESULT: {len(final_detections_serializable)} números detectados")
-        print(f"🔍 DEBUG - Números: {list(final_detections_serializable.keys())}")
-        for num, dets in final_detections_serializable.items():
-            print(f"🔍 DEBUG - Número {num}: {len(dets)} detecciones")
-        
+        final_detections_serializable = dict(detections)
         yield {"type": "final_result", "stage": "completion", "data": final_detections_serializable, "message": "Detecciones finales recopiladas."}
 
 def parse_merma(merma_str: Optional[str]) -> Optional[float]:
@@ -209,8 +201,6 @@ def parse_merma(merma_str: Optional[str]) -> Optional[float]:
         return float(merma_str)
     except (ValueError, TypeError):
         return None
-
-live_frames: Dict[str, Any] = {}
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
@@ -233,11 +223,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS: orígenes permitidos configurables vía variable de entorno CORS_ORIGINS
+# (lista separada por comas). Valor por defecto: entornos de desarrollo locales.
+_default_origins = "http://localhost:3000,http://127.0.0.1:3000"
+_cors_env = os.getenv("CORS_ORIGINS", _default_origins)
+ALLOWED_ORIGINS = [o.strip() for o in _cors_env.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -246,10 +242,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 TEMP_CHUNK_DIR = UPLOAD_DIR / "temp_chunks"
 TEMP_CHUNK_DIR.mkdir(exist_ok=True)
 
-# Variables globales para monitoreo en vivo
-monitor_tasks = {}  # Diccionario para manejar tareas de monitoreo activas
-
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads") # Ensure directory is string
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 @app.post("/upload-chunk/")
 async def upload_chunk(
@@ -1327,7 +1320,6 @@ async def monitor_camera_live(camera_id: str, camera_config: dict):
 
                     except Exception as e:
                         print(f"Error en detección de cámara {camera_id}: {e}")
-                        import traceback
                         traceback.print_exc()
                 # Almacenar frame para streaming
                 live_frames[camera_id] = frame
@@ -1368,11 +1360,65 @@ async def stream_camera_video(camera_id: str):
                     frame_bytes = buffer.tobytes()
                     yield (b'--frame\r\n'
                            b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
-            import time
+
             time.sleep(0.1)  # ~10 FPS
     
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/video/frame/{camera_id}")
+async def get_video_frame(camera_id: str):
+    """Devuelve el último frame de la cámara como data URL JPEG base64."""
+    frame = live_frames.get(camera_id)
+    if frame is None:
+        return {"status": "error", "message": f"No hay frames disponibles para {camera_id}"}
+    ok, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if not ok:
+        return {"status": "error", "message": "No se pudo codificar el frame"}
+    data_url = "data:image/jpeg;base64," + base64.b64encode(buffer.tobytes()).decode("ascii")
+    return {"status": "success", "frame": data_url}
+
+
+@app.get("/video/info/{camera_id}")
+async def get_video_info(camera_id: str):
+    """Metadatos de la cámara/video configurados para ese camera_id."""
+    camera_config = next((cam for cam in CAMERAS_CONFIG if cam["camera_id"] == camera_id), None)
+    is_active = camera_id in monitor_tasks and not monitor_tasks[camera_id].done()
+    if not camera_config and camera_id != "webcam":
+        return {"status": "error", "message": f"Cámara {camera_id} no configurada"}
+    cfg = camera_config or {"camera_id": "webcam", "source_type": "camera", "tunel": "Webcam", "evento": "ingreso"}
+    return {
+        "status": "success",
+        "video_info": {
+            "camera_id": cfg["camera_id"],
+            "source_type": cfg.get("source_type", "camera"),
+            "tunel": cfg.get("tunel"),
+            "evento": cfg.get("evento"),
+            "demo_mode": cfg.get("demo_mode", False),
+            "is_active": is_active,
+        },
+    }
+
+
+@app.get("/trayectoria/{numero}")
+async def get_trayectoria(numero: str):
+    """Trayectoria completa (registros ordenados temporalmente) de una vagoneta."""
+    registros = await crud.get_trayectoria_completa(numero)
+    if not registros:
+        raise HTTPException(status_code=404, detail=f"Sin trayectoria para la vagoneta {numero}")
+    for r in registros:
+        if "_id" in r:
+            r["_id"] = str(r["_id"])
+        if isinstance(r.get("timestamp"), datetime):
+            r["timestamp"] = r["timestamp"].isoformat()
+    return registros
+
+
+@app.get("/health")
+async def health_check():
+    """Health check simple para monitoreo/troubleshooting."""
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 
 # ====================
 # INICIALIZACIÓN DEL SERVIDOR

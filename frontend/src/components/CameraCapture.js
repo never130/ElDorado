@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from "react";
 import Spinner from "./Spinner";
+import { assetUrl } from "../config/api";
 
 const Feedback = ({ status, message }) => {
   if (!status) return null;
@@ -104,7 +105,7 @@ const CameraPanel = ({ label, evento, onCapture, loading, feedback, ultimos }) =
           <div className="flex gap-2 flex-wrap">
             {ultimos.map((r, idx) => (
               <div key={idx} className="border border-cyan-200 rounded-lg p-2 bg-cyan-50 flex flex-col items-center w-24">
-                <img src={`http://localhost:8000/${r.imagen_path}`} alt="mini" className="w-16 h-16 object-cover rounded mb-1" />
+                <img src={assetUrl(r.imagen_path)} alt="mini" className="w-16 h-16 object-cover rounded mb-1" />
                 <div className="text-xs text-cyan-900 font-bold">{r.numero || "-"}</div>
                 <div className="text-[10px] text-cyan-600">{r.tunel || "-"}</div>
                 <div className="text-[10px] text-cyan-600">{new Date(r.timestamp).toLocaleTimeString()}</div>

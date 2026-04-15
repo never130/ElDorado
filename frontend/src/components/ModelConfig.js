@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './ModelConfig.css';
+import { API_BASE_URL } from '../config/api';
 
 const ModelConfig = () => {
-  // API Base URL configuration
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     const [config, setConfig] = useState({
     min_confidence: 0.25,
     usar_agrupacion: true,

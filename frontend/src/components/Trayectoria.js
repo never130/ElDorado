@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { API_BASE_URL, assetUrl } from "../config/api";
 
 const Trayectoria = () => {
   const [numero, setNumero] = useState("");
@@ -13,7 +14,7 @@ const Trayectoria = () => {
     setError("");
     setRegistros([]);
     try {
-      const res = await axios.get(`http://localhost:8000/trayectoria/${numero}`);
+      const res = await axios.get(`${API_BASE_URL}/trayectoria/${numero}`);
       setRegistros(res.data);
     } catch (err) {
       setError("No se encontró trayectoria para ese número de vagoneta.");
@@ -109,7 +110,7 @@ const Trayectoria = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {registro.imagen_path ? (
                           <img 
-                            src={`http://localhost:8000/${registro.imagen_path}`}
+                            src={assetUrl(registro.imagen_path)}
                             alt="vagoneta"
                             className="h-12 w-16 object-cover rounded border border-slate-200"
                           />
